@@ -1,0 +1,16 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>TrafficGraph — preview</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="states.html">Popup states</a><a href="indicators.html">Indicators</a><a href="picker.html">Indicator picker</a><a href="graph.html" aria-current="page">Graph</a><a href="adapters.html">Adapter list</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage"><div class="ca-popup"><div class="ca-pad">
+  <div class="ca-graph" role="img" aria-label="Download and upload over the last 60 seconds">
+    <svg id="g"></svg><span class="scale" id="max"></span><span class="span">60 s</span>
+  </div></div></div></div>
+<script>
+  var A = window.CosmicApplets, s = A.sim(5);
+  function paint() { var m = A.drawGraph(document.getElementById('g'), s.down, s.up, { w: 304, h: 120, grid: 3, pad: 1 }); var f = A.formatRate(m); document.getElementById('max').textContent = f.num.trim() + ' ' + f.unit; }
+  paint(); setInterval(function () { s.tick(); paint(); }, 1000);
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

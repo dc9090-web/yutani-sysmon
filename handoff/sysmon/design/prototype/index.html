@@ -1,0 +1,74 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>System Monitor — prototype</title>
+<style>
+  .proto { display:flex; flex-direction:column; align-items:center; gap:4px; padding:16px; }
+  .bar { width:392px; display:flex; justify-content:flex-end; }
+  [hidden] { display:none !important; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html" aria-current="page">Prototype</a><a href="panel.html">Panel button</a><a href="sections.html">Sections</a><a href="meters.html">Meters</a><a href="toggles.html">Toggles</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="proto">
+  <div class="bar"><div class="ca-panel h"><button class="ca-pbtn is-open" id="pbtn" aria-label="System monitor" aria-expanded="true"><span class="ca-sys" id="sys"></span></button></div></div>
+  <div class="ca-popup" id="popup">
+    <section id="main">
+      <div id="secs"></div>
+      <div class="ca-sep"></div>
+      <button class="ca-menu" id="toSettings"><span class="ca-icon i-settings"></span><span class="grow">Applet settings</span><span class="ca-icon i-next"></span></button>
+    </section>
+    <section id="settings" hidden>
+      <div class="ca-subhead"><button class="ca-iconbtn" id="back" aria-label="Back"><span class="ca-icon i-back"></span></button><span class="ca-heading">Applet settings</span></div>
+      <div class="ca-sep full" style="margin:4px 0 8px"></div>
+      <div class="ca-pad ca-caption-heading">Show in panel</div>
+      <div id="toggles"></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading" id="modeLbl">Panel style</div>
+      <div class="ca-pad"><div class="ca-seg" role="group" aria-labelledby="modeLbl" id="seg"><button data-v="numbers">Numbers</button><button data-v="graph">Graph</button><button data-v="both">Both</button></div></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading">Disk</div>
+      <div role="radiogroup" aria-label="Disk" id="disks"></div>
+    </section>
+  </div>
+</div>
+<script>
+  var A = window.CosmicApplets, o = A.sysSim(12), $ = function (id) { return document.getElementById(id); };
+  var METRICS = [{ m: 'cpu', n: 'CPU', c: 'Usage %' }, { m: 'gpu', n: 'GPU', c: 'Usage %' }, { m: 'mem', n: 'Memory', c: 'RAM used %' }, { m: 'disk', n: 'Disk I/O', c: 'Read / write' }];
+  var DISKS = [{ id: 'all', n: 'All drives', c: 'Sum of physical drives' }, { id: 'nvme0n1', n: 'nvme0n1', c: 'Samsung SSD 990 PRO 2TB' }, { id: 'sda', n: 'sda', c: 'WDC WD40EFRX · 4 TB' }];
+  var state = { show: { cpu: true, gpu: true, mem: true, disk: false }, mode: 'numbers', disk: 'all' };
+  function buildPanel() {
+    var sys = $('sys'); sys.innerHTML = '';
+    METRICS.forEach(function (x) { if (!state.show[x.m]) return; var e = document.createElement('span'); e.className = 'ca-metric' + (state.mode === 'both' ? ' with-graph' : '') + (state.mode === 'graph' ? ' graph-only' : ''); e.dataset.m = x.m; sys.appendChild(e); });
+  }
+  function paintPanel() {
+    [].forEach.call($('sys').children, function (e) {
+      var m = e.dataset.m, html = A.metricChunkHTML(m, o.now, { memTotal: o.memTotal }), lbl = html.slice(0, html.indexOf('</span>') + 7), val = html.slice(lbl.length);
+      if (state.mode === 'numbers') { e.innerHTML = html; return; }
+      e.innerHTML = state.mode === 'graph' ? lbl + '<svg aria-hidden="true"></svg>' : '<svg aria-hidden="true"></svg>' + lbl + val;
+      var g = e.querySelector('svg');
+      if (m === 'disk') A.drawGraph(g, o.dr, o.dw, { w: 32, h: 20, pad: 1 }); else A.drawSeries(g, m === 'mem' ? o.memPct : o[m], { w: 32, h: 20, pad: 1, max: 100, cls: m });
+    });
+    var n = o.now; $('pbtn').title = 'CPU ' + Math.round(n.cpu) + '%, GPU ' + Math.round(n.gpu) + '%, RAM ' + Math.round(n.mem / o.memTotal * 100) + '%';
+  }
+  function paintMain() {
+    var d = DISKS.filter(function (x) { return x.id === state.disk; })[0];
+    $('secs').innerHTML = ['cpu', 'gpu', 'mem', 'disk'].map(function (m, i) { return (i ? '<div class="ca-sep"></div>' : '') + '<section class="ca-msec">' + A.sysSectionHTML(m, o, { diskLabel: d.id === 'all' ? 'All drives' : d.n + ' · ' + d.c }) + '</section>'; }).join('');
+    A.paintSysGraphs($('secs'), o);
+  }
+  function paintSettings() {
+    var on = METRICS.filter(function (x) { return state.show[x.m]; }).length;
+    $('toggles').innerHTML = METRICS.map(function (x) { var last = on === 1 && state.show[x.m];
+      return '<div class="ca-trow"><span class="m-' + x.m + '" style="width:8px;height:8px;border-radius:50%;background:currentColor"></span><span class="grow"><span class="ca-body">' + x.n + '</span><span class="ca-caption">' + x.c + (last ? ' · at least one stays on' : '') + '</span></span><button class="ca-toggler" role="switch" aria-checked="' + state.show[x.m] + '" aria-label="' + x.n + '" data-m="' + x.m + '"' + (last ? ' disabled' : '') + '></button></div>'; }).join('');
+    [].forEach.call($('seg').children, function (b) { b.setAttribute('aria-pressed', b.dataset.v === state.mode); });
+    $('disks').innerHTML = DISKS.map(function (x) { var s = x.id === state.disk; return '<button class="ca-menu" role="radio" aria-checked="' + s + '" data-d="' + x.id + '"><span class="ca-radio' + (s ? ' on' : '') + '"></span><span class="grow" style="display:flex;flex-direction:column"><span>' + x.n + '</span><span class="ca-caption">' + x.c + '</span></span></button>'; }).join('');
+  }
+  $('toSettings').onclick = function () { $('main').hidden = true; $('settings').hidden = false; paintSettings(); $('back').focus(); };
+  $('back').onclick = function () { $('settings').hidden = true; $('main').hidden = false; paintMain(); };
+  $('toggles').onclick = function (e) { var b = e.target.closest('[data-m]'); if (!b || b.disabled) return; state.show[b.dataset.m] = !state.show[b.dataset.m]; buildPanel(); paintPanel(); paintSettings(); };
+  $('seg').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state.mode = b.dataset.v; buildPanel(); paintPanel(); paintSettings(); };
+  $('disks').onclick = function (e) { var b = e.target.closest('[data-d]'); if (!b) return; state.disk = b.dataset.d; paintSettings(); };
+  $('pbtn').onclick = function () { var p = $('popup'), open = p.hidden; p.hidden = !open; this.classList.toggle('is-open', open); this.setAttribute('aria-expanded', open); };
+  buildPanel(); paintPanel(); paintMain();
+  setInterval(function () { o.tick(); paintPanel(); if (!$('main').hidden) paintMain(); }, 1000);
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

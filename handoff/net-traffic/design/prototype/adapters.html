@@ -1,0 +1,29 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>AdapterList — preview</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="states.html">Popup states</a><a href="indicators.html">Indicators</a><a href="picker.html">Indicator picker</a><a href="graph.html">Graph</a><a href="adapters.html" aria-current="page">Adapter list</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage"><div class="ca-popup" id="p">
+  <div class="ca-pad ca-caption-heading">Adapter</div>
+  <div role="radiogroup" aria-label="Adapter" id="list"></div>
+</div></div>
+<script>
+  var items = [
+    { id: 'auto', name: 'Automatic', meta: 'Follows the default route · now enp5s0', icon: 'i-net' },
+    { id: 'enp5s0', name: 'enp5s0', meta: 'Ethernet · 1 Gb/s · Connected', icon: 'i-wired', st: 'ok' },
+    { id: 'wlp3s0', name: 'wlp3s0', meta: 'Wi-Fi · HomeNet · Connected', icon: 'i-wireless', st: 'ok' },
+    { id: 'wg0', name: 'wg0', meta: 'Virtual · WireGuard · Up', icon: 'i-net' },
+    { id: 'enx00e04c', name: 'enx00e04c680b2f', meta: 'Ethernet · Disconnected', icon: 'i-wired', st: 'err' }
+  ], sel = 'auto', list = document.getElementById('list');
+  function paint() {
+    list.innerHTML = items.map(function (it) {
+      var on = it.id === sel;
+      return '<button class="ca-menu" role="radio" aria-checked="' + on + '" data-id="' + it.id + '"><span class="ca-radio' + (on ? ' on' : '') + '"></span>' +
+        '<span class="ca-icon ' + it.icon + '"></span><span class="grow" style="display:flex;flex-direction:column"><span>' + it.name + '</span><span class="ca-caption' + (it.st === 'err' ? ' ca-err' : '') + '">' + it.meta + '</span></span></button>';
+    }).join('');
+  }
+  list.addEventListener('click', function (e) { var b = e.target.closest('[data-id]'); if (b) { sel = b.dataset.id; paint(); } });
+  paint();
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

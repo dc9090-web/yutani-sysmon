@@ -1,0 +1,16 @@
+[package]
+name = "cosmic-applet-sysmon"
+description = "COSMIC panel applet: CPU, AMD GPU, memory and disk I/O"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+common.workspace = true
+libcosmic.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

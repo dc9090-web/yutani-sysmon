@@ -1,0 +1,36 @@
+[workspace]
+resolver = "3"
+members = ["crates/common", "crates/net-traffic", "crates/sysmon"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+rust-version = "1.90"
+
+[workspace.dependencies]
+# Pinned to the commit the design handoffs were written against (2026-10-06).
+libcosmic = { git = "https://github.com/pop-os/libcosmic", rev = "60ad2cc4c33d7500aba557cd9150e6938d72d5a1", default-features = false, features = [
+    "applet",
+    "applet-token",
+    "tokio",
+    "wayland",
+] }
+i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
+i18n-embed-fl = "0.10"
+rust-embed = "8"
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+common = { path = "crates/common", package = "yutani-monitor-common" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 16
+strip = true

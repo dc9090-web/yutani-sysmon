@@ -1,0 +1,15 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>Meter — preview</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="sections.html">Sections</a><a href="meters.html" aria-current="page">Meters</a><a href="toggles.html">Toggles</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage"><div class="ca-popup"><div class="ca-msec" id="m"></div></div></div>
+<script>
+  var A = window.CosmicApplets;
+  document.getElementById('m').innerHTML = '<div class="ca-meters">' +
+    A.meterHTML('mem', 'RAM', '29%', 0.29) + A.meterHTML('mem', 'Swap', '0.4 / 8.0 GiB', 0.05) +
+    A.meterHTML('gpu', 'VRAM', '9.8 / 20.0 GiB', 0.49) + A.meterHTML('gpu', 'Power', '212 W / 315 W', 0.67) +
+    A.meterHTML('mem', 'RAM (≥ 90%)', '94%', 0.94, true) + A.meterHTML('gpu', 'VRAM (≥ 95%)', '19.4 / 20.0 GiB', 0.97, true) + '</div>';
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>Network applet — prototype</title>
+<style>
+  .proto { display:flex; flex-direction:column; align-items:center; gap:4px; padding:16px; }
+  .bar { width:392px; display:flex; justify-content:flex-end; }
+  .bar .ca-panel { width:100%; justify-content:flex-end; }
+  [hidden] { display:none !important; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html" aria-current="page">Prototype</a><a href="panel.html">Panel button</a><a href="states.html">Popup states</a><a href="indicators.html">Indicators</a><a href="picker.html">Indicator picker</a><a href="graph.html">Graph</a><a href="adapters.html">Adapter list</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="proto">
+  <div class="bar"><div class="ca-panel h"><button class="ca-pbtn is-open" id="pbtn" aria-label="Network traffic" aria-expanded="true"></button></div></div>
+  <div class="ca-popup" id="popup">
+    <!-- main view -->
+    <section id="main">
+      <div class="ca-pad ca-head"><span class="ca-icon" id="hicon"></span>
+        <div class="meta"><span class="ca-heading" id="hname"></span><span class="ca-caption" id="hmeta"></span></div></div>
+      <div class="ca-pad ca-readouts">
+        <div class="ca-readout"><div class="lbl ca-caption"><span class="ca-swatch-down"></span>Download</div><div class="val" id="rd"></div></div>
+        <div class="ca-readout"><div class="lbl ca-caption"><span class="ca-swatch-up"></span>Upload</div><div class="val" id="ru"></div></div>
+      </div>
+      <div class="ca-pad"><div class="ca-graph" role="img" aria-label="Download and upload over the last 60 seconds"><svg id="g"></svg><span class="scale" id="gmax"></span><span class="span">60 s</span></div></div>
+      <div class="ca-pad ca-totals ca-caption"><span>Since login</span><span class="ca-prates" id="tot"></span></div>
+      <div class="ca-sep"></div>
+      <button class="ca-menu" id="toSettings"><span class="ca-icon i-settings"></span><span class="grow">Applet settings</span><span class="ca-icon i-next"></span></button>
+      <button class="ca-menu"><span class="grow">Network settings…</span></button>
+    </section>
+    <!-- settings view -->
+    <section id="settings" hidden>
+      <div class="ca-subhead"><button class="ca-iconbtn" id="back" aria-label="Back"><span class="ca-icon i-back"></span></button><span class="ca-heading">Applet settings</span></div>
+      <div class="ca-sep full" style="margin:4px 0 8px"></div>
+      <div class="ca-pad ca-caption-heading" id="modeLbl">Show in panel</div>
+      <div class="ca-pad"><div class="ca-seg" role="group" aria-labelledby="modeLbl" id="seg">
+        <button data-v="numbers">Numbers</button><button data-v="graph">Graph</button><button data-v="both">Both</button></div></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading" id="indLbl">Direction indicator</div>
+      <div class="ca-pad"><div class="ca-seg icons" role="group" aria-labelledby="indLbl" id="ind"></div></div>
+      <div class="ca-pad ca-caption" id="indCap" style="padding-top:0"></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading">Adapter</div>
+      <div role="radiogroup" aria-label="Adapter" id="list"></div>
+    </section>
+  </div>
+</div>
+<script>
+  var A = window.CosmicApplets, NS = 'http://www.w3.org/2000/svg';
+  var ADAPTERS = [
+    { id: 'auto', name: 'Automatic', meta: 'Follows the default route · now enp5s0', icon: 'i-net', sim: A.sim(21) },
+    { id: 'enp5s0', name: 'enp5s0', meta: 'Ethernet · 1 Gb/s · Connected', icon: 'i-wired', sim: A.sim(21) },
+    { id: 'wlp3s0', name: 'wlp3s0', meta: 'Wi-Fi · HomeNet · Connected', icon: 'i-wireless', sim: A.sim(4, 0.25) },
+    { id: 'wg0', name: 'wg0', meta: 'Virtual · WireGuard · Up', icon: 'i-net', sim: A.sim(9, 0.05) },
+    { id: 'enx', name: 'enx00e04c680b2f', meta: 'Ethernet · Disconnected', icon: 'i-wired', down: true }
+  ];
+  var state = { mode: 'both', adapter: 'auto', indicator: A.DEFAULT_INDICATOR }, $ = function (id) { return document.getElementById(id); };
+  function cur() { return ADAPTERS.filter(function (a) { return a.id === state.adapter; })[0]; }
+  function buildPanel() {
+    var b = $('pbtn'); b.innerHTML = '';
+    if (state.mode !== 'numbers') { var g = document.createElementNS(NS, 'svg'); g.setAttribute('class', 'ca-spark'); g.setAttribute('aria-hidden', 'true'); b.appendChild(g); }
+    if (state.mode !== 'graph') { var r = document.createElement('span'); r.className = 'ca-prates'; b.appendChild(r); }
+  }
+  function rateHTML(v) { var f = A.formatRate(v); return f.num.trim() + '<span class="u">' + f.unit + '</span>'; }
+  function paint() {
+    var a = cur(), s = a.sim, d = s ? s.down[s.down.length - 1] : null, u = s ? s.up[s.up.length - 1] : null, b = $('pbtn');
+    var g = b.querySelector('svg'); if (g) A.drawGraph(g, s ? s.down : [0], s ? s.up : [0], { w: 48, h: 20, pad: 1 });
+    var r = b.querySelector('.ca-prates');
+    var txt = !!A.IND[state.indicator].txt;
+    if (r) { r.classList.toggle('txt', txt); r.innerHTML = A.ratesHTML(d, u, { off: !!a.down, indicator: state.indicator }); }
+    $('hicon').className = 'ca-icon ' + (a.id === 'auto' ? ADAPTERS[1].icon : a.icon);
+    $('hname').textContent = a.id === 'auto' ? 'enp5s0' : a.name;
+    $('hmeta').innerHTML = a.down ? '<span class="ca-err">Disconnected</span> · Ethernet' : (a.id === 'auto' ? 'Automatic · Ethernet · <span class="ca-ok">Connected</span>' : a.meta.replace(/(Connected|Up)$/, '<span class="ca-ok">$1</span>'));
+    $('rd').innerHTML = rateHTML(d); $('ru').innerHTML = rateHTML(u);
+    var m = A.drawGraph($('g'), s ? s.down : [0], s ? s.up : [0], { w: 304, h: 120, grid: 3, pad: 1 }); var fm = A.formatRate(s ? m : null);
+    $('gmax').textContent = s ? fm.num.trim() + ' ' + fm.unit : '';
+    $('tot').innerHTML = A.ratesHTML(s ? s.totals.down : null, s ? s.totals.up : null, { off: !s, bytes: true, indicator: state.indicator }); $('tot').classList.toggle('txt', txt);
+  }
+  function paintSettings() {
+    $('ind').innerHTML = A.pickerHTML(state.indicator); var I = A.IND[state.indicator]; $('indCap').textContent = I.name + ' · ' + I.note;
+    [].forEach.call($('seg').children, function (x) { x.setAttribute('aria-pressed', x.dataset.v === state.mode); });
+    $('list').innerHTML = ADAPTERS.map(function (it) { var on = it.id === state.adapter;
+      return '<button class="ca-menu" role="radio" aria-checked="' + on + '" data-id="' + it.id + '"><span class="ca-radio' + (on ? ' on' : '') + '"></span><span class="ca-icon ' + it.icon + '"></span><span class="grow" style="display:flex;flex-direction:column"><span>' + it.name + '</span><span class="ca-caption' + (it.down ? ' ca-err' : '') + '">' + it.meta + '</span></span></button>'; }).join('');
+  }
+  $('toSettings').onclick = function () { $('main').hidden = true; $('settings').hidden = false; paintSettings(); $('back').focus(); };
+  $('back').onclick = function () { $('settings').hidden = true; $('main').hidden = false; paint(); $('toSettings').focus(); };
+  $('seg').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state.mode = b.dataset.v; buildPanel(); paintSettings(); paint(); };
+  $('ind').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state.indicator = b.dataset.v; paintSettings(); paint(); };
+  $('list').onclick = function (e) { var b = e.target.closest('[data-id]'); if (!b) return; state.adapter = b.dataset.id; paintSettings(); paint(); };
+  $('pbtn').onclick = function () { var p = $('popup'), open = p.hidden; p.hidden = !open; this.classList.toggle('is-open', open); this.setAttribute('aria-expanded', open); };
+  buildPanel(); paint();
+  setInterval(function () { ADAPTERS.forEach(function (a) { if (a.sim) a.sim.tick(); }); paint(); }, 1000);
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

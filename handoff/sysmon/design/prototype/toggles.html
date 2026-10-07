@@ -1,0 +1,24 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>MetricToggles — preview</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="sections.html">Sections</a><a href="meters.html">Meters</a><a href="toggles.html" aria-current="page">Toggles</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage"><div class="ca-popup">
+  <div class="ca-pad ca-caption-heading">Show in panel</div>
+  <div id="rows"></div>
+</div></div>
+<script>
+  var rows = [{ m: 'cpu', n: 'CPU', c: 'Usage %', on: true }, { m: 'gpu', n: 'GPU', c: 'Usage %', on: true }, { m: 'mem', n: 'Memory', c: 'RAM used %', on: true }, { m: 'disk', n: 'Disk I/O', c: 'Read / write', on: false }];
+  var el = document.getElementById('rows');
+  function paint() {
+    el.innerHTML = rows.map(function (r, i) {
+      var last = rows.filter(function (x) { return x.on; }).length === 1 && r.on;
+      return '<div class="ca-trow"><span class="dot m-' + r.m + '" style="width:8px;height:8px;border-radius:50%;background:currentColor"></span><span class="grow"><span class="ca-body">' + r.n + '</span><span class="ca-caption">' + r.c + (last ? ' · at least one metric stays on' : '') + '</span></span>' +
+        '<button class="ca-toggler" role="switch" aria-checked="' + r.on + '" aria-label="' + r.n + '" data-i="' + i + '"' + (last ? ' disabled' : '') + '></button></div>';
+    }).join('');
+  }
+  el.onclick = function (e) { var b = e.target.closest('[data-i]'); if (!b || b.disabled) return; rows[b.dataset.i].on = !rows[b.dataset.i].on; paint(); };
+  paint();
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

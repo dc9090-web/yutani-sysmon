@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=System Monitor
+Comment=CPU, GPU, memory and disk activity in the panel
+Type=Application
+Exec=cosmic-applet-sysmon
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Applet;CPU;GPU;Memory;RAM;Disk;Temperature;Monitor;
+Icon=io.github.dc.CosmicAppletSysMon-symbolic
+StartupNotify=true
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicShrinkable=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

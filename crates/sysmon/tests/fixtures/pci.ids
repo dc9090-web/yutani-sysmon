@@ -1,0 +1,20 @@
+# trimmed pci.ids
+1002  Advanced Micro Devices, Inc. [AMD/ATI]
+	15bf  Phoenix1
+	744c  Navi 31 [Radeon RX 7900 XT/7900 XTX/7900 GRE/7900M]
+		1002 0e3b  RX 7900 XTX / RX 7900 GRE [XFX]
+		1043 0506  TUF Gaming Radeon RX 7900 XTX OC
+		148c 2425  HELLHOUND RX 7900 GRE
+		1849 5304  Radeon RX 7900 XTX
+		1da2 471e  PULSE RX 7900 XTX
+		1da2 475e  PULSE RX 7900 GRE
+		1da2 e471  NITRO+ RX 7900 XTX Vapor-X
+		1eae 7901  RX-79XMERCB9 [SPEEDSTER MERC 310 RX 7900 XTX]
+		1eae 790a  RX-79GMERCBR [XFX RX 7900 GRE]
+	7550  Navi 48 [Radeon RX 9070/9070 XT/9070 GRE]
+		1458 2437  Navi 48 XTX [Radeon RX 9070 XT Gaming OC ICE 16G]
+		148c 2435  Radeon RX 9070 XT 16GB
+		1849 5403  Navi 48 XTX [Steel Legend Radeon RX 9070 XT]
+		1da2 e490  Navi 48 XTX [Sapphire Pulse Radeon RX 9070 XT]
+8086  Intel Corporation
+	15bf  JHL6240 Thunderbolt 3 NHI (Low Power) [Alpine Ridge LP 2016]

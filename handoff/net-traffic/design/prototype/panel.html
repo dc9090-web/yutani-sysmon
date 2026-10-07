@@ -1,0 +1,51 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>PanelButton — preview</title><style>/* desktop backdrop so the panel strip (bg) reads as a separate surface */ body { background: var(--bg-component); }</style></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html" aria-current="page">Panel button</a><a href="states.html">Popup states</a><a href="indicators.html">Indicators</a><a href="picker.html">Indicator picker</a><a href="graph.html">Graph</a><a href="adapters.html">Adapter list</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage" id="root">
+  <div class="col"><span class="ca-tag">Numbers · size S</span>
+    <div class="ca-panel h"><button class="ca-pbtn" data-mode="numbers"></button></div></div>
+  <div class="col"><span class="ca-tag">Graph · size S</span>
+    <div class="ca-panel h"><button class="ca-pbtn" data-mode="graph"></button></div></div>
+  <div class="col"><span class="ca-tag">Both · size S (default)</span>
+    <div class="ca-panel h"><button class="ca-pbtn" data-mode="both"></button></div></div>
+  <div class="col"><span class="ca-tag">Both · hover</span>
+    <div class="ca-panel h"><button class="ca-pbtn is-hover" data-mode="both"></button></div></div>
+  <div class="col"><span class="ca-tag">Both · popup open</span>
+    <div class="ca-panel h"><button class="ca-pbtn is-open" data-mode="both"></button></div></div>
+  <div class="col"><span class="ca-tag">Disconnected</span>
+    <div class="ca-panel h"><button class="ca-pbtn" data-mode="both" data-down="1"></button></div></div>
+  <div class="col"><span class="ca-tag">Vertical · numbers / graph / both</span>
+    <div style="display:flex;gap:16px">
+      <div class="ca-panel v"><button class="ca-pbtn" data-mode="numbers"></button></div>
+      <div class="ca-panel v"><button class="ca-pbtn" data-mode="graph"></button></div>
+      <div class="ca-panel v"><button class="ca-pbtn" data-mode="both"></button></div>
+    </div></div>
+</div>
+<script>
+  var A = window.CosmicApplets, s = A.sim(11), NS = 'http://www.w3.org/2000/svg';
+  var btns = [].slice.call(document.querySelectorAll('.ca-pbtn'));
+  btns.forEach(function (b) {
+    var v = b.closest('.ca-panel').classList.contains('v'), m = b.dataset.mode;
+    b.setAttribute('aria-label', 'Network traffic');
+    if (m !== 'numbers') { var g = document.createElementNS(NS, 'svg'); g.setAttribute('class', 'ca-spark'); g.setAttribute('aria-hidden', 'true'); b.appendChild(g); }
+    if (m !== 'graph') { var r = document.createElement('span'); r.className = 'ca-prates'; b.appendChild(r); }
+  });
+  function paint() {
+    btns.forEach(function (b) {
+      var v = b.closest('.ca-panel').classList.contains('v'), off = b.dataset.down;
+      var d = s.down[s.down.length - 1], u = s.up[s.up.length - 1];
+      var g = b.querySelector('svg');
+      if (g) A.drawGraph(g, off ? [0] : s.down, off ? [0] : s.up, { w: v ? 20 : 48, h: 20, pad: 1 });
+      var r = b.querySelector('.ca-prates');
+      if (r) {
+        r.innerHTML = A.ratesHTML(d, u, { off: !!off, compact: v });
+        b.title = off ? 'enp5s0 disconnected' : 'Network traffic';
+      }
+    });
+  }
+  paint(); setInterval(function () { s.tick(); paint(); }, 1000);
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

@@ -1,0 +1,52 @@
+# List of AMDGPU IDs (trimmed)
+#
+# device_id,	revision_id,	product_name
+
+1.0.0
+15BF,	00,	AMD Radeon 780M Graphics
+15BF,	01,	AMD Radeon 760M Graphics
+15BF,	02,	AMD Radeon 780M Graphics
+15BF,	03,	AMD Radeon 760M Graphics
+15BF,	05,	AMD Radeon 760M Graphics
+15BF,	06,	AMD Radeon 780M Graphics
+15BF,	07,	AMD Radeon 740M Graphics
+15BF,	08,	AMD Radeon 740M Graphics
+15BF,	C1,	AMD Radeon 780M Graphics
+15BF,	C2,	AMD Radeon 780M Graphics
+15BF,	C3,	AMD Radeon 760M Graphics
+15BF,	C4,	AMD Radeon 780M Graphics
+15BF,	C5,	AMD Radeon 740M Graphics
+15BF,	C6,	AMD Radeon 780M Graphics
+15BF,	C7,	AMD Radeon 780M Graphics
+15BF,	C8,	AMD Radeon 760M Graphics
+15BF,	C9,	AMD Radeon 780M Graphics
+15BF,	CA,	AMD Radeon 740M Graphics
+15BF,	CB,	AMD Radeon 760M Graphics
+15BF,	CC,	AMD Radeon 740M Graphics
+15BF,	CD,	AMD Radeon 760M Graphics
+15BF,	CE,	AMD Radeon 740M Graphics
+15BF,	CF,	AMD Radeon 780M Graphics
+15BF,	D0,	AMD Radeon 780M Graphics
+15BF,	D1,	AMD Radeon 780M Graphics
+15BF,	D2,	AMD Radeon 780M Graphics
+15BF,	D3,	AMD Radeon 780M Graphics
+15BF,	D4,	AMD Radeon 780M Graphics
+15BF,	D5,	AMD Radeon 760M Graphics
+15BF,	D6,	AMD Radeon 760M Graphics
+15BF,	D7,	AMD Radeon 780M Graphics
+15BF,	D8,	AMD Radeon 740M Graphics
+15BF,	D9,	AMD Radeon 780M Graphics
+15BF,	DA,	AMD Radeon 780M Graphics
+15BF,	DB,	AMD Radeon 760M Graphics
+15BF,	DC,	AMD Radeon 760M Graphics
+15BF,	DD,	AMD Radeon 780M Graphics
+15BF,	DE,	AMD Radeon 740M Graphics
+15BF,	DF,	AMD Radeon 760M Graphics
+15BF,	F0,	AMD Radeon 760M Graphics
+744C,	C8,	AMD Radeon RX 7900 XTX
+744C,	CC,	AMD Radeon RX 7900 XT
+744C,	CE,	AMD Radeon RX 7900 GRE
+744C,	CF,	AMD Radeon RX 7900M
+7550,	C0,	AMD Radeon RX 9070 XT
+7550,	C2,	AMD Radeon RX 9070 GRE
+7550,	C3,	AMD Radeon RX 9070

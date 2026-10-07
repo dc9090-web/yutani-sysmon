@@ -1,0 +1,5 @@
+# OPTIONAL: let the "Package power" stat read AMD/Intel RAPL energy counters.
+# These counters are root-only by default because of CVE-2020-8694, a
+# power side-channel. Install only if you accept that risk on this machine:
+#   sudo cp 60-cosmic-applet-sysmon-rapl.rules /etc/udev/rules.d/ && sudo udevadm trigger
+SUBSYSTEM=="powercap", KERNEL=="intel-rapl:0", RUN+="/bin/chmod 0444 /sys/class/powercap/%k/energy_uj"

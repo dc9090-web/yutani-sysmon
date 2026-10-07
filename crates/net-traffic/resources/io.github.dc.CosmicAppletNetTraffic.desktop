@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=Network Traffic
+Comment=Live download and upload rates for one network adapter
+Type=Application
+Exec=cosmic-applet-net-traffic
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Applet;Network;Traffic;Bandwidth;Speed;
+Icon=io.github.dc.CosmicAppletNetTraffic-symbolic
+StartupNotify=true
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicShrinkable=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

@@ -1,0 +1,44 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>Indicator options</title><style>/* desktop backdrop so the panel strip (bg) reads as a separate surface */ body { background: var(--bg-component); }</style>
+<style>
+  .opts { display:grid; grid-template-columns: 200px 184px 132px 48px 1fr; align-items:center; column-gap:24px; row-gap:12px; padding:16px 24px; }
+  .hdr { font:600 12px/17px var(--font-sans); color:var(--on-bg-muted); }
+  .name { display:flex; flex-direction:column; }
+  .name b { font:700 14px/21px var(--font-sans); }
+  .rule { grid-column:1/-1; height:1px; background:var(--component-divider); }
+  .tot { display:inline-grid; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="states.html">Popup states</a><a href="indicators.html" aria-current="page">Indicators</a><a href="picker.html">Indicator picker</a><a href="graph.html">Graph</a><a href="adapters.html">Adapter list</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="opts" id="opts">
+  <span class="hdr">Option</span><span class="hdr">Panel · Both</span><span class="hdr">Panel · Numbers</span><span class="hdr">Vertical</span><span class="hdr">Popup totals</span>
+</div>
+<script>
+  var A = window.CosmicApplets, NS = 'http://www.w3.org/2000/svg', s = A.sim(11);
+  var OPTS = A.INDICATORS.map(function (i, k) { return { id: i.id, letter: 'ABCDEF'[k], name: i.name, src: i.note, txt: i.txt }; });
+  var root = document.getElementById('opts'), cells = [];
+  OPTS.forEach(function (o) {
+    var row = document.createElement('div'); row.style.display = 'contents';
+    var k = o.txt ? ' txt' : '';
+    row.innerHTML = '<div class="rule"></div>' +
+      '<div class="name"><b>' + o.letter + ' · ' + o.name + '</b><span class="ca-caption">' + o.src + '</span></div>' +
+      '<div><div class="ca-panel h"><button class="ca-pbtn" aria-label="Network traffic"><svg class="ca-spark" aria-hidden="true"></svg><span class="ca-prates' + k + '" data-o="' + o.id + '"></span></button></div></div>' +
+      '<div><div class="ca-panel h"><button class="ca-pbtn" aria-label="Network traffic"><span class="ca-prates' + k + '" data-o="' + o.id + '"></span></button></div></div>' +
+      '<div><div class="ca-panel v"><button class="ca-pbtn" aria-label="Network traffic"><span class="ca-prates' + k + '" data-o="' + o.id + '" data-c="1"></span></button></div></div>' +
+      '<div class="ca-totals"><span class="ca-prates tot' + k + '" data-o="' + o.id + '" data-t="1"></span></div>';
+    root.appendChild(row);
+  });
+  var byId = {}; OPTS.forEach(function (o) { byId[o.id] = o; });
+  function paint() {
+    var d = s.down[s.down.length - 1], u = s.up[s.up.length - 1];
+    [].forEach.call(document.querySelectorAll('.ca-spark'), function (g) { A.drawGraph(g, s.down, s.up, { w: 48, h: 20, pad: 1 }); });
+    [].forEach.call(document.querySelectorAll('[data-o]'), function (r) {
+      var o = byId[r.dataset.o];
+      r.innerHTML = r.dataset.t ? A.ratesHTML(s.totals.down, s.totals.up, { bytes: true, indicator: o.id }) : A.ratesHTML(d, u, { compact: !!r.dataset.c, indicator: o.id });
+    });
+  }
+  paint(); setInterval(function () { s.tick(); paint(); }, 1000);
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>
