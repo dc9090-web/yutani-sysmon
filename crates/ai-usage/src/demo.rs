@@ -15,6 +15,21 @@ pub fn first() -> usize {
     std::env::var("AI_USAGE_DEMO_SCENE").ok().and_then(|s| s.parse().ok()).unwrap_or(0) % SCENES
 }
 
+/// `AI_USAGE_SHOT=path`: after the first frames, save the window (RGBA,
+/// as a PAM image) to `path` and exit. For README screenshots.
+pub fn shot_path() -> Option<std::path::PathBuf> {
+    std::env::var_os("AI_USAGE_SHOT").filter(|v| !v.is_empty()).map(Into::into)
+}
+
+/// Writes a screenshot as a PAM image (RGBA, no encoder needed).
+pub fn save_shot(path: &std::path::Path, shot: &cosmic::iced::window::Screenshot) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut f = std::io::BufWriter::new(std::fs::File::create(path)?);
+    write!(f, "P7\nWIDTH {}\nHEIGHT {}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n", shot.size.width, shot.size.height)?;
+    f.write_all(&shot.rgba)?;
+    f.flush()
+}
+
 pub fn enabled() -> bool {
     std::env::var_os("AI_USAGE_DEMO").is_some_and(|v| !v.is_empty() && v != "0")
 }

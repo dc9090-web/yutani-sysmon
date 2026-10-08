@@ -48,6 +48,7 @@ run applet="sysmon":
 
 # AI Usage's popup in a window, cycling through every state every 10 s from
 # the test fixtures: no login, no network. AI_USAGE_DEMO_SCENE=n starts on scene n.
+# AI_USAGE_SHOT=file.pam saves the window as an image and exits (README screenshots).
 demo:
     AI_USAGE_DEMO=1 APPLET_PREVIEW=1 cargo run -p cosmic-applet-ai-usage --features demo
 

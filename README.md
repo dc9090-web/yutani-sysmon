@@ -9,18 +9,19 @@
 
 **Three tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; and your Claude usage limits.**
 
-Straight from procfs and sysfs. No system-stats crates, no daemon, no polling of anything you aren't looking at. One read pass a second, about 0.1 % of one core, and less memory than COSMIC's own clock.
+The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Each applet costs about 0.1 % of one core.
 
 [![Rust](https://img.shields.io/badge/Rust-2024-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![COSMIC](https://img.shields.io/badge/COSMIC-1.10-3b82f6)](https://system76.com/cosmic)
 [![libcosmic](https://img.shields.io/badge/libcosmic-60ad2cc-0ea5e9)](https://github.com/pop-os/libcosmic/commit/60ad2cc4c33d7500aba557cd9150e6938d72d5a1)
 [![Wayland](https://img.shields.io/badge/Wayland-native-7c3aed)](https://wayland.freedesktop.org/)
 [![AMD](https://img.shields.io/badge/GPU-amdgpu-e11d48)](https://docs.kernel.org/gpu/amdgpu/)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-login_reused-d97757)](https://docs.anthropic.com/en/docs/claude-code)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-green)](LICENSE)
 
-<img src="docs/screenshots/panel.png" alt="The COSMIC top panel with the System Monitor applet showing CPU 4 %, GPU 9 %, RAM 18 %, and the Network Traffic applet showing a sparkline and RX/TX rates" width="900">
+<img src="docs/screenshots/panel.png" alt="The COSMIC top panel: the AI Usage robot with 5h, Week and Fable bars; System Monitor showing CPU 13 %, GPU 7 %, RAM 36 %; and Network Traffic showing a sparkline and RX/TX rates" width="910">
 
-*An XS top panel: System Monitor on the left, Network Traffic on the right. Values stay centred and the width never moves.*
+*An XS top panel: AI Usage, System Monitor and Network Traffic, left to right. Values stay centred and the width never moves.*
 
 </div>
 
@@ -48,10 +49,12 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 🗂️ | **Paths resolved once** | hwmon labels, GPU sensors, drives and adapters are discovered at start and on a slow timer, never globbed per tick. |
 | 👁️ | **Only what's on screen** | Clocks, VRAM, GPU power and NVMe temps are read only while the popup shows them. The panel needs about 8 small reads a second. |
 | 💤 | **Never wakes a sleeping GPU** | A runtime-suspended dGPU reads as idle without touching its sensors, so laptops stay in D3cold. |
-| 🧵 | **Single-thread executor** | One 1 Hz timer per applet. Rates come from monotonic `Instant` deltas, never an assumed second. |
+| 🧵 | **Single-thread executor** | One 1 Hz timer per system applet. Rates come from monotonic `Instant` deltas, never an assumed second. AI Usage sleeps until its next request and redraws its countdowns every 30 s. |
+| 🌐 | **One host, no telemetry** | AI Usage talks only to `api.anthropic.com` over rustls, caches nothing on disk, and holds the token only for the length of a request. |
+| 🔑 | **Hands off your login** | AI Usage opens Claude Code's credentials read-only and never refreshes the token, so it can't log Claude Code out. |
 | 🔒 | **No privileges, ever** | Nothing calls `sudo` or `pkexec` or writes to sysfs. Root-only counters show `—`. |
 
-Measured on a Ryzen 9 3950X with an RX 9070 XT over 30 s on the live panel:
+Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the system applets; 6 min, startup included, for AI Usage):
 
 | | CPU | Memory (RSS) |
 | --- | --- | --- |
@@ -134,16 +137,30 @@ The applet picks it up within 30 s, with no restart. To undo it, delete the rule
 
 ## 🤖 AI Usage
 
+<div align="center">
+<img src="docs/screenshots/ai-usage-popup.png" alt="AI Usage popup: Claude, Max plan, dc@example.com, updated 2m ago; Session 42 % used, resets in 2h 12m, 14 % under pace; Weekly 61 % used, 6 % ahead of pace; Fable 84 % used in the warning colour, 29 % ahead of pace" width="359">
+&nbsp;&nbsp;
+<img src="docs/screenshots/ai-usage-settings.png" alt="AI Usage settings: Show in panel togglers for Session, Weekly, Fable and Session reset; Panel style, Show, Reset times and Refresh every segmented controls" width="359">
+</div>
+
+<div align="center">
+<img src="docs/screenshots/ai-usage-limit.png" alt="AI Usage at the limit: Session and Fable at 100 % in the destructive colour with Limit reached and their reset times; Weekly 88 % in the warning colour" width="359">
+&nbsp;&nbsp;
+<img src="docs/screenshots/ai-usage-expired.png" alt="AI Usage with an expired login: a Claude Code login expired banner above dimmed rows, and Updated 3h ago in the warning colour" width="359">
+</div>
+
+*Screenshots use the demo data (`just demo`), not a real account.*
+
 A robot, then one small bar per window: **5h** (Session), **Week** and **Fable**, in that order. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 2h 13m" or "Resets Sat 9:00 AM") and pace ("14% under pace").
 
-- **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the 5-hour window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
-- **Login:** it reads Claude Code's own login (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`). It **never writes, refreshes or rotates it**; when the login expires, run `claude` once and the applet picks it up within seconds.
-- **Network:** one `GET https://api.anthropic.com/api/oauth/usage` every 1, 5 or 15 minutes (±10 % jitter), on opening the popup if the data is over a minute old, and just after each window resets. It backs off while offline and honours `Retry-After`. No telemetry and no usage cache on disk.
-- **Undocumented endpoint:** if its format changes, the popup says "Usage format not recognised" and **Copy diagnostics** copies the HTTP status and the JSON key names only, never values or the token.
-- **States:** not signed in, login expired, offline, rate limited, format not recognised and no Fable limit each have their own banner or header text; stale values are dimmed.
-- **Clock time** follows the COSMIC time applet's 12/24-hour setting.
+- 🎚️ **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the 5-hour window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
+- 🔑 **Login:** it reads Claude Code's own login (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`). It **never writes, refreshes or rotates it**; when the login expires, run `claude` once and the applet picks it up within seconds.
+- 🌐 **Network:** one `GET https://api.anthropic.com/api/oauth/usage` every 1, 5 or 15 minutes (±10 % jitter), on opening the popup if the data is over a minute old, and just after each window resets. It backs off while offline and honours `Retry-After`. No telemetry and no usage cache on disk.
+- 🧪 **Undocumented endpoint:** if its format changes, the popup says "Usage format not recognised" and **Copy diagnostics** copies the HTTP status and the JSON key names only, never values or the token.
+- 🚦 **States:** not signed in, login expired, offline, rate limited, format not recognised and no Fable limit each have their own banner or header text; stale values are dimmed.
+- 🕒 **Clock time** follows the COSMIC time applet's 12/24-hour setting.
 
-`just demo` runs the popup in a window, cycling through every state every 10 s from the test fixtures, with no login and no network (`AI_USAGE_DEMO_SCENE=n` starts on scene *n*).
+`just demo` runs the popup in a window, cycling through every state every 10 s from the test fixtures, with no login and no network (`AI_USAGE_DEMO_SCENE=n` starts on scene *n*; `AI_USAGE_SHOT=file.pam` saves the window and exits, which is how the screenshots above were made).
 
 ---
 
@@ -178,7 +195,7 @@ sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.
 | --- | --- |
 | `just build` | `cargo build --release` |
 | `just check` | clippy with `-D warnings`, and `cargo fmt --check` |
-| `just test` | unit tests: formatting, parsers against fixture files, hysteresis, config invariants |
+| `just test` | unit tests: formatting, parsers against fixture files, hysteresis, config invariants, AI Usage's login and usage fixtures and refresh timing |
 | `just install` / `just uninstall` | binaries, desktop entries and icons under `$PREFIX` |
 | `just preview sysmon` | the popup in an ordinary window, no panel needed (`APPLET_PREVIEW=settings` opens the settings page) |
 | `just run net-traffic` | run with debug logs |

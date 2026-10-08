@@ -22,7 +22,7 @@ fn main() -> cosmic::iced::Result {
     if preview() {
         // The popup in an ordinary window, for checks without a panel:
         // `APPLET_PREVIEW=1 cosmic-applet-ai-usage`.
-        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(360.0, 640.0));
+        let settings = cosmic::app::Settings::default().size(cosmic::iced::Size::new(360.0, 800.0));
         return cosmic::app::run::<app::App>(settings, ());
     }
     cosmic::applet::run::<app::App>(())

@@ -85,6 +85,11 @@ pub enum Message {
     /// Demo mode: the next scene.
     #[cfg(feature = "demo")]
     DemoNext,
+    /// Demo mode: capture the window (`AI_USAGE_SHOT`).
+    #[cfg(feature = "demo")]
+    TakeShot,
+    #[cfg(feature = "demo")]
+    Shot(cosmic::iced::window::Screenshot),
     Segment(Seg, Entity),
     CopyDiagnostics,
 }
@@ -630,6 +635,15 @@ impl cosmic::Application for App {
         #[cfg(feature = "demo")]
         if crate::demo::enabled() {
             app.show_scene(crate::demo::first());
+            if crate::demo::shot_path().is_some() {
+                return (
+                    app,
+                    cosmic::task::future(async {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        Message::TakeShot
+                    }),
+                );
+            }
             return (app, Task::none());
         }
         (app, cosmic::task::message(Message::Refresh))
@@ -727,6 +741,22 @@ impl cosmic::Application for App {
                 Toggle::SessionReset => self.save(|c, h| c.set_show_session_reset(h, on)),
             },
             Message::Segment(seg, e) => return self.segment(seg, e),
+            #[cfg(feature = "demo")]
+            Message::TakeShot => {
+                if let Some(id) = self.core.main_window_id() {
+                    return cosmic::iced::window::screenshot(id).map(|s| cosmic::Action::App(Message::Shot(s)));
+                }
+            }
+            #[cfg(feature = "demo")]
+            Message::Shot(s) => {
+                if let Some(path) = crate::demo::shot_path() {
+                    match crate::demo::save_shot(&path, &s) {
+                        Ok(()) => tracing::info!("saved {}", path.display()),
+                        Err(e) => tracing::error!("saving {}: {e}", path.display()),
+                    }
+                }
+                std::process::exit(0);
+            }
             #[cfg(feature = "demo")]
             Message::DemoNext => {
                 if let Some(i) = self.demo {
