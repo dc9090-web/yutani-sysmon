@@ -1,0 +1,31 @@
+[package]
+name = "cosmic-applet-weather"
+description = "COSMIC panel applet: OpenWeather conditions and forecasts for up to 5 cities"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# oo7 0.6 needs 1.92.
+rust-version = "1.92"
+
+[features]
+# `WEATHER_DEMO=1` cycles through every state from the test fixtures.
+demo = []
+
+[dependencies]
+common.workspace = true
+libcosmic.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+oo7 = { version = "0.6", default-features = false, features = ["tokio", "native_crypto"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "json"] }
+serde_json = "1"
+tokio = { version = "1", features = ["time", "macros", "fs"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt"] }

@@ -1,0 +1,18 @@
+{
+  "id": "bom-qld-2026-10-08-0042",
+  "sender_name": "Bureau of Meteorology",
+  "event": "Severe Thunderstorm Warning",
+  "start": 1791424800,
+  "end": 1791450000,
+  "description": [
+    {
+      "language": "en",
+      "description": "Severe thunderstorms are likely to produce damaging winds, large hailstones and heavy rainfall that may lead to flash flooding in the warning area over the next several hours."
+    }
+  ],
+  "tags": [
+    "Thunderstorm",
+    "Wind",
+    "Flood"
+  ]
+}

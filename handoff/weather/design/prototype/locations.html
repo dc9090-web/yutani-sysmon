@@ -1,0 +1,24 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>WxLocations — preview</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="current.html">Current</a><a href="hourly.html">Hourly</a><a href="daily.html">7-day</a><a href="details.html">Details</a><a href="locations.html" aria-current="page">Locations</a><a href="icon-sets.html">Icon sets</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage"><div class="ca-popup" id="p"></div></div>
+<script>
+  var A = window.CosmicApplets, saved = A.WX_LOCATIONS.slice(), primary = 'syd', q = 'Mel';
+  var RESULTS = [{ name: 'Melbourne', region: 'Victoria, AU', lat: -37.81, lon: 144.96 }, { name: 'Melbourne', region: 'Florida, US', lat: 28.08, lon: -80.61 }, { name: 'Melville', region: 'Western Australia, AU', lat: -32.04, lon: 115.8 }];
+  function paint() {
+    document.getElementById('p').innerHTML = '<div class="ca-pad ca-caption-heading">Locations</div>' +
+      saved.map(function (l) { var on = l.id === primary, w = A.wxSim(l, 'metric');
+        return '<div class="ca-locrow"><button class="ca-radio' + (on ? ' on' : '') + '" role="radio" aria-checked="' + on + '" aria-label="Show ' + l.name + ' in panel" data-p="' + l.id + '" style="background:none;padding:0;cursor:default"></button>' + A.wxIcon(w.current.icon) +
+          '<span class="grow"><span class="ca-body">' + l.name + '</span><span class="ca-caption">' + l.region + (on ? ' · in panel' : '') + '</span></span><span class="tmp">' + A.fmtT(w.current.temp) + '</span>' +
+          '<button class="ca-iconbtn" aria-label="Remove ' + l.name + '" data-r="' + l.id + '"><span class="ca-icon i-delete"></span></button></div>'; }).join('') +
+      '<div class="ca-pad ca-caption">' + saved.length + ' of 5 saved</div>' +
+      '<div class="ca-search"><span class="ca-icon i-find"></span><input id="q" value="' + q + '" placeholder="Add a city" aria-label="Add a city"></div>' +
+      (q.length >= 2 ? '<div class="ca-results" role="listbox">' + RESULTS.map(function (r) { return '<button role="option"><span class="ca-icon i-add"></span><span class="grow"><span>' + r.name + '</span><span class="ca-caption">' + r.region + ' · ' + r.lat.toFixed(2) + ', ' + r.lon.toFixed(2) + '</span></span></button>'; }).join('') + '</div>' : '') + '<div style="height:8px"></div>';
+  }
+  document.getElementById('p').onclick = function (e) { var b = e.target.closest('[data-p],[data-r]'); if (!b) return; if (b.dataset.p) primary = b.dataset.p; else { saved = saved.filter(function (l) { return l.id !== b.dataset.r; }); if (!saved.some(function (l) { return l.id === primary; }) && saved[0]) primary = saved[0].id; } paint(); };
+  paint();
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

@@ -1,0 +1,43 @@
+[
+  {
+    "name": "Melbourne",
+    "local_names": {
+      "en": "Melbourne"
+    },
+    "lat": -37.8142176,
+    "lon": 144.9631608,
+    "country": "AU",
+    "state": "Victoria"
+  },
+  {
+    "name": "Melbourne",
+    "local_names": {
+      "en": "Melbourne"
+    },
+    "lat": 28.0836269,
+    "lon": -80.6081089,
+    "country": "US",
+    "state": "Florida"
+  },
+  {
+    "name": "Melbourne",
+    "lat": 52.823,
+    "lon": -1.428,
+    "country": "GB",
+    "state": "England"
+  },
+  {
+    "name": "Melbourne",
+    "lat": 41.9353,
+    "lon": -93.1041,
+    "country": "US",
+    "state": "Iowa"
+  },
+  {
+    "name": "Melbourne",
+    "lat": 35.057,
+    "lon": -91.9504,
+    "country": "US",
+    "state": "Arkansas"
+  }
+]

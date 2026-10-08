@@ -1,0 +1,98 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>Weather — prototype</title>
+<style>
+  .proto { display:flex; flex-direction:column; align-items:center; gap:4px; padding:16px; }
+  .topbar { width:392px; display:flex; justify-content:flex-end; }
+  [hidden] { display:none !important; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html" aria-current="page">Prototype</a><a href="panel.html">Panel button</a><a href="current.html">Current</a><a href="hourly.html">Hourly</a><a href="daily.html">7-day</a><a href="details.html">Details</a><a href="locations.html">Locations</a><a href="icon-sets.html">Icon sets</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="proto">
+  <div class="topbar"><div class="ca-panel h"><button class="ca-pbtn is-open" id="pbtn" aria-expanded="true"></button></div></div>
+  <div class="ca-popup" id="popup">
+    <section id="main">
+      <div class="ca-wxhead">
+        <button class="loc" id="locBtn" aria-haspopup="listbox" aria-expanded="false"><span class="ca-heading"><span id="locName"></span><span class="ca-icon i-down"></span></span><span class="ca-caption" id="locRegion"></span></button>
+        <span class="upd" id="upd"></span><button class="ca-iconbtn" id="refresh" aria-label="Refresh now"><span class="ca-icon i-refresh"></span></button>
+      </div>
+      <div class="ca-locmenu" id="locMenu" role="listbox" hidden></div>
+      <div id="body"></div>
+      <div class="ca-sep"></div>
+      <button class="ca-menu" id="toSettings"><span class="ca-icon i-settings"></span><span class="grow">Applet settings</span><span class="ca-icon i-next"></span></button>
+      <div class="ca-attrib">Weather data: OpenWeather</div>
+    </section>
+    <section id="settings" hidden>
+      <div class="ca-subhead"><button class="ca-iconbtn" id="back" aria-label="Back"><span class="ca-icon i-back"></span></button><span class="ca-heading">Applet settings</span></div>
+      <div class="ca-sep full" style="margin:4px 0 8px"></div>
+      <div id="locs"></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading" id="uLbl">Units</div>
+      <div class="ca-pad"><div class="ca-seg" role="group" aria-labelledby="uLbl" id="units"><button data-v="metric">Metric · °C, km/h</button><button data-v="imperial">Imperial · °F, mph</button></div></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading" id="iLbl">Weather icons</div>
+      <div class="ca-pad"><div class="ca-seg" role="group" aria-labelledby="iLbl" id="iset"><button data-v="detailed">Detailed</button><button data-v="system">System</button></div></div>
+      <div class="ca-pad ca-caption" id="iCap" style="padding-top:0"></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading">Panel</div>
+      <div id="ptog"></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading" id="rLbl">Refresh every</div>
+      <div class="ca-pad"><div class="ca-seg" role="group" aria-labelledby="rLbl" id="every"><button data-v="15">15 min</button><button data-v="30">30 min</button><button data-v="60">60 min</button></div></div>
+      <div class="ca-sep"></div>
+      <div class="ca-pad ca-caption-heading">OpenWeather API key</div>
+      <div class="ca-keyrow"><div class="ca-search"><input id="key" type="password" value="0123456789abcdef0123456789abcdef" aria-label="API key" spellcheck="false"></div><button class="ca-btn" id="test" style="margin:0">Test</button></div>
+      <div class="ca-keystat ok" id="keystat">✓ Key works · One Call 4.0 · stored in the system keyring</div>
+      <div style="height:8px"></div>
+    </section>
+  </div>
+</div>
+<script>
+  var A = window.CosmicApplets, $ = function (id) { return document.getElementById(id); };
+  var state = { iset: 'detailed', units: 'metric', primary: 'syd', view: 'syd', city: false, hilo: false, every: '30', saved: A.WX_LOCATIONS.slice(), q: '' };
+  var RESULTS = [{ id: 'mel', name: 'Melbourne', region: 'Victoria, AU', lat: -37.81, lon: 144.96, tz: 39600, base: 16, seed: 9, cloudy: 0.7, rainy: 0.35, desc: 'Light rain' }, { id: 'mlb', name: 'Melbourne', region: 'Florida, US', lat: 28.08, lon: -80.61, tz: -14400, base: 27, seed: 4, cloudy: 0.3, rainy: 0.25, desc: 'Few clouds' }];
+  function loc(id) { return state.saved.filter(function (l) { return l.id === id; })[0] || state.saved[0]; }
+  function wx(id) { return A.wxSim(loc(id), state.units); }
+  function paintPanel() { var w = wx(state.primary); $('pbtn').innerHTML = A.wxPanelHTML(w, { city: state.city, hilo: state.hilo }); $('pbtn').title = w.loc.name + ': ' + A.fmtT(w.current.temp) + ', ' + w.current.desc + (w.alerts.length ? ' · ' + w.alerts[0].event : ''); }
+  function paintMain() {
+    var w = wx(state.view);
+    $('locName').textContent = w.loc.name; $('locRegion').textContent = w.loc.region;
+    $('upd').textContent = 'Updated 4m ago';
+    $('locMenu').innerHTML = state.saved.map(function (l) { var x = A.wxSim(l, state.units); return '<button role="option" aria-selected="' + (l.id === state.view) + '" data-v="' + l.id + '">' + A.wxIcon(x.current.icon) + '<span class="grow">' + l.name + '</span><span class="ca-caption">' + A.fmtT(x.current.temp) + (l.id === state.primary ? ' · panel' : '') + '</span></button>'; }).join('');
+    $('body').innerHTML = A.wxCurrentHTML(w) + A.wxAlertHTML(w) + '<div class="ca-sep"></div><div class="ca-wxsec ca-caption-heading">Next 24 hours</div><div class="ca-wxhourly">' + A.wxHourlySVG(w) + '</div>' +
+      '<div class="ca-sep"></div><div class="ca-wxsec ca-caption-heading">7-day forecast</div>' + A.wxDailyHTML(w) + '<div class="ca-sep"></div>' + A.wxDetailsHTML(w);
+  }
+  function paintSettings() {
+    $('locs').innerHTML = '<div class="ca-pad ca-caption-heading">Locations</div>' + state.saved.map(function (l) { var on = l.id === state.primary, w = A.wxSim(l, state.units);
+        return '<div class="ca-locrow"><button class="ca-radio' + (on ? ' on' : '') + '" role="radio" aria-checked="' + on + '" aria-label="Show ' + l.name + ' in panel" data-p="' + l.id + '" style="background:none;padding:0"></button>' + A.wxIcon(w.current.icon) +
+          '<span class="grow"><span class="ca-body">' + l.name + '</span><span class="ca-caption">' + l.region + (on ? ' · in panel' : '') + '</span></span><span class="tmp">' + A.fmtT(w.current.temp) + '</span>' +
+          '<button class="ca-iconbtn" aria-label="Remove ' + l.name + '" data-r="' + l.id + '"' + (state.saved.length === 1 ? ' disabled' : '') + '><span class="ca-icon i-delete"></span></button></div>'; }).join('') +
+      '<div class="ca-pad ca-caption">' + state.saved.length + ' of 5 saved · the radio picks the panel city</div>' +
+      (state.saved.length < 5 ? '<div class="ca-search"><span class="ca-icon i-find"></span><input id="q" value="' + state.q + '" placeholder="Add a city" aria-label="Add a city" autocomplete="off"></div>' +
+      (state.q.length >= 2 ? '<div class="ca-results" role="listbox">' + RESULTS.map(function (r) { return '<button role="option" data-a="' + r.id + '"><span class="ca-icon i-add"></span><span class="grow"><span>' + r.name + '</span><span class="ca-caption">' + r.region + ' · ' + r.lat.toFixed(2) + ', ' + r.lon.toFixed(2) + '</span></span></button>'; }).join('') + '</div>' : '') : '') + '<div style="height:8px"></div>';
+    [].forEach.call($('iset').children, function (b) { b.setAttribute('aria-pressed', b.dataset.v === state.iset); });
+    $('iCap').textContent = state.iset === 'detailed' ? 'Pixeden weather set · 24 conditions incl. drizzle, heavy rain, wind' : 'COSMIC icon theme · follows your system icons';
+    [].forEach.call($('units').children, function (b) { b.setAttribute('aria-pressed', b.dataset.v === state.units); });
+    [].forEach.call($('every').children, function (b) { b.setAttribute('aria-pressed', b.dataset.v === state.every); });
+    $('ptog').innerHTML = [['city', 'Show city name', 'Above the temperature'], ['hilo', 'Show high / low', "Today's forecast"]].map(function (t) { return '<div class="ca-trow"><span class="grow"><span class="ca-body">' + t[1] + '</span><span class="ca-caption">' + t[2] + '</span></span><button class="ca-toggler" role="switch" aria-checked="' + state[t[0]] + '" data-t="' + t[0] + '" aria-label="' + t[1] + '"></button></div>'; }).join('');
+    var q = $('q'); if (q) { q.oninput = function () { state.q = this.value; var pos = this.selectionStart; paintSettings(); var n = $('q'); n.focus(); n.setSelectionRange(pos, pos); }; }
+  }
+  $('locBtn').onclick = function () { var m = $('locMenu'), open = m.hidden; m.hidden = !open; this.setAttribute('aria-expanded', open); };
+  $('locMenu').onclick = function (e) { var b = e.target.closest('[data-v]'); if (!b) return; state.view = b.dataset.v; $('locMenu').hidden = true; paintMain(); };
+  $('locs').onclick = function (e) { var b = e.target.closest('[data-p],[data-r],[data-a]'); if (!b || b.disabled) return;
+    if (b.dataset.p) state.primary = state.view = b.dataset.p;
+    else if (b.dataset.r) { state.saved = state.saved.filter(function (l) { return l.id !== b.dataset.r; }); if (!state.saved.some(function (l) { return l.id === state.primary; })) state.primary = state.view = state.saved[0].id; }
+    else { var r = RESULTS.filter(function (x) { return x.id === b.dataset.a; })[0]; if (!state.saved.some(function (l) { return l.id === r.id; })) state.saved.push(r); state.q = ''; }
+    paintSettings(); paintPanel(); };
+  $('iset').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state.iset = b.dataset.v; A.setWxIconSet(state.iset); paintSettings(); paintPanel(); };
+  $('units').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state.units = b.dataset.v; paintSettings(); paintPanel(); };
+  $('every').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state.every = b.dataset.v; paintSettings(); };
+  $('ptog').onclick = function (e) { var b = e.target.closest('[data-t]'); if (!b) return; state[b.dataset.t] = !state[b.dataset.t]; paintSettings(); paintPanel(); };
+  $('test').onclick = function () { $('keystat').textContent = 'Checking…'; $('keystat').className = 'ca-keystat'; setTimeout(function () { $('keystat').className = 'ca-keystat ok'; $('keystat').textContent = '✓ Key works · One Call 4.0 · stored in the system keyring'; }, 600); };
+  $('toSettings').onclick = function () { $('main').hidden = true; $('settings').hidden = false; paintSettings(); $('back').focus(); };
+  $('back').onclick = function () { $('settings').hidden = true; $('main').hidden = false; paintMain(); };
+  $('pbtn').onclick = function () { var p = $('popup'), open = p.hidden; p.hidden = !open; this.classList.toggle('is-open', open); this.setAttribute('aria-expanded', open); };
+  paintPanel(); paintMain();
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

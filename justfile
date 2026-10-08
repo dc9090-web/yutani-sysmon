@@ -1,11 +1,11 @@
-# Yutani system monitoring: three COSMIC panel applets.
+# Yutani system monitoring: four COSMIC panel applets.
 
 prefix := env_var_or_default("PREFIX", "/usr/local")
 bindir := prefix / "bin"
 appdir := prefix / "share/applications"
 icondir := prefix / "share/icons/hicolor/scalable"
 
-applets := "net-traffic sysmon ai-usage"
+applets := "net-traffic sysmon ai-usage weather"
 
 # Release build of all applets.
 build:
@@ -20,11 +20,14 @@ test:
     cargo test --workspace
 
 # Install binaries, desktop entries and icons under $PREFIX (default /usr/local).
-# The optional RAPL udev rule is never installed; see the README.
+# The optional RAPL udev rule is never installed; see the README. Weather
+# installs no icons: its Detailed set is embedded and its list icon is a system one.
 install: build
     install -Dm0755 target/release/cosmic-applet-net-traffic {{bindir}}/cosmic-applet-net-traffic
     install -Dm0755 target/release/cosmic-applet-sysmon {{bindir}}/cosmic-applet-sysmon
     install -Dm0755 target/release/cosmic-applet-ai-usage {{bindir}}/cosmic-applet-ai-usage
+    install -Dm0755 target/release/cosmic-applet-weather {{bindir}}/cosmic-applet-weather
+    install -Dm0644 crates/weather/resources/io.github.dc.CosmicAppletWeather.desktop {{appdir}}/io.github.dc.CosmicAppletWeather.desktop
     install -Dm0644 crates/ai-usage/resources/io.github.dc.CosmicAppletAiUsage.desktop {{appdir}}/io.github.dc.CosmicAppletAiUsage.desktop
     install -Dm0644 crates/ai-usage/resources/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletAiUsage-symbolic.svg {{icondir}}/apps/io.github.dc.CosmicAppletAiUsage-symbolic.svg
     install -Dm0644 crates/net-traffic/resources/io.github.dc.CosmicAppletNetTraffic.desktop {{appdir}}/io.github.dc.CosmicAppletNetTraffic.desktop
@@ -35,7 +38,8 @@ install: build
     install -Dm0644 crates/sysmon/resources/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletSysMon-symbolic.svg {{icondir}}/apps/io.github.dc.CosmicAppletSysMon-symbolic.svg
 
 uninstall:
-    rm -f {{bindir}}/cosmic-applet-net-traffic {{bindir}}/cosmic-applet-sysmon {{bindir}}/cosmic-applet-ai-usage
+    rm -f {{bindir}}/cosmic-applet-net-traffic {{bindir}}/cosmic-applet-sysmon {{bindir}}/cosmic-applet-ai-usage {{bindir}}/cosmic-applet-weather
+    rm -f {{appdir}}/io.github.dc.CosmicAppletWeather.desktop
     rm -f {{appdir}}/io.github.dc.CosmicAppletAiUsage.desktop {{icondir}}/apps/io.github.dc.CosmicAppletAiUsage-symbolic.svg
     rm -f {{appdir}}/io.github.dc.CosmicAppletNetTraffic.desktop {{appdir}}/io.github.dc.CosmicAppletSysMon.desktop
     rm -f {{icondir}}/apps/io.github.dc.CosmicAppletNetTraffic-symbolic.svg {{icondir}}/apps/io.github.dc.CosmicAppletSysMon-symbolic.svg
@@ -56,3 +60,14 @@ demo:
 # The popup in an ordinary window, for visual checks without a panel.
 preview applet="sysmon":
     APPLET_PREVIEW=1 cargo run -p cosmic-applet-{{applet}}
+
+# Weather's popup in a window, cycling through every state every 10 s from the
+# test fixtures: no key, no network. WEATHER_DEMO_SCENE=n starts on scene n;
+# WEATHER_SHOT=file.pam saves the window as an image and exits.
+weather-demo:
+    WEATHER_DEMO=1 APPLET_PREVIEW=1 cargo run -p cosmic-applet-weather --features demo
+
+# Weather: one real call per OpenWeather endpoint with the stored key; prints
+# each response's key paths that differ from tests/fixtures (never values).
+live-check:
+    cargo test -p cosmic-applet-weather live_check -- --ignored --nocapture

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/common", "crates/net-traffic", "crates/sysmon", "crates/ai-usage"]
+members = ["crates/common", "crates/net-traffic", "crates/sysmon", "crates/ai-usage", "crates/weather"]
 
 [workspace.package]
 version = "0.1.0"

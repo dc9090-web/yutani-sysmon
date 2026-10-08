@@ -7,9 +7,9 @@
 
 <br>
 
-**Three tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; and your Claude usage limits.**
+**Four tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; your Claude usage limits; and the weather for your cities.**
 
-The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Each applet costs about 0.1 % of one core.
+The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. Each applet costs about 0.1 % of one core.
 
 [![Rust](https://img.shields.io/badge/Rust-2024-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![COSMIC](https://img.shields.io/badge/COSMIC-1.10-3b82f6)](https://system76.com/cosmic)
@@ -17,6 +17,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 [![Wayland](https://img.shields.io/badge/Wayland-native-7c3aed)](https://wayland.freedesktop.org/)
 [![AMD](https://img.shields.io/badge/GPU-amdgpu-e11d48)](https://docs.kernel.org/gpu/amdgpu/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-login_reused-d97757)](https://docs.anthropic.com/en/docs/claude-code)
+[![OpenWeather](https://img.shields.io/badge/OpenWeather-your_own_key-eb6e4b)](https://openweathermap.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-green)](LICENSE)
 
 <img src="docs/screenshots/panel.png" alt="The COSMIC top panel: the AI Usage Cyborg avatar with its session ring and 5h, Week and Fable bars; System Monitor showing CPU 9 %, GPU 9 %, RAM 29 %; and Network Traffic showing a sparkline and RX/TX rates" width="962">
@@ -34,6 +35,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
 | 🖥️ | **System Monitor** | CPU, AMD GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
 | 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Reuses Claude Code's login, read-only. |
+| 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
 
 They are separate applets, each with its own panel slot, settings and process. Add any combination.
 
@@ -51,6 +53,7 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 💤 | **Never wakes a sleeping GPU** | A runtime-suspended dGPU reads as idle without touching its sensors, so laptops stay in D3cold. |
 | 🧵 | **Single-thread executor** | One 1 Hz timer per system applet. Rates come from monotonic `Instant` deltas, never an assumed second. AI Usage sleeps until its next request and redraws its countdowns every 30 s. |
 | 🌐 | **One host, no telemetry** | AI Usage talks only to `api.anthropic.com` over rustls, caches nothing on disk, and holds the token only for the length of a request. |
+| 🗝️ | **Key in the keyring** | Weather keeps your OpenWeather key in the Secret Service keyring (a 0600 file only if there's none), never in config or logs, and talks only to `api.openweathermap.org`. |
 | 🔑 | **Hands off your login** | AI Usage opens Claude Code's credentials read-only and never refreshes the token, so it can't log Claude Code out. |
 | 🔒 | **No privileges, ever** | Nothing calls `sudo` or `pkexec` or writes to sysfs. Root-only counters show `—`. |
 
@@ -61,6 +64,7 @@ Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the s
 | Network Traffic | ~0.1 % of one core | 25.0 MB |
 | System Monitor | ~0.1 % of one core | 24.7 MB |
 | AI Usage | ~0.1 % of one core (one request every 5 min) | 31.2 MB |
+| Weather | idle between refreshes (one city every 30 min) | 32.7 MB |
 | *stock COSMIC clock applet* | – | 28.8 MB |
 
 ---
@@ -165,6 +169,38 @@ An icon, then one small bar per window: **5h** (Session), **Week** and **Fable**
 
 ---
 
+## 🌤️ Weather
+
+<div align="center">
+<img src="docs/screenshots/weather-popup.png" alt="Weather popup for Sydney: 23° and scattered clouds with high 27° and low 15°; a 24-hour temperature line with rain chances; a 7-day forecast with range bars on one week-wide scale; wind, humidity, UV, sunrise, sunset and pressure; and the Weather data: OpenWeather attribution" width="352">
+&nbsp;&nbsp;
+<img src="docs/screenshots/weather-settings.png" alt="Weather settings: three saved locations with the panel city's radio selected, a city search showing five Melbourne results with regions and coordinates, and the Weather icons and Units segmented controls" width="352">
+</div>
+
+<div align="center">
+<img src="docs/screenshots/weather-alert.png" alt="Weather for Brisbane with a Severe Thunderstorm Warning banner from the Bureau of Meteorology, expanded to show its description" width="352">
+&nbsp;&nbsp;
+<img src="docs/screenshots/weather-free.png" alt="Weather on the free plan: 3-hour steps over 24 hours, a 5-day forecast, UV shown as a dash, and a note about the free plan" width="352">
+</div>
+
+*Screenshots use the demo data (`just weather-demo`), not a live call.*
+
+The condition icon and the temperature for your panel city, in a fixed 4-character field so the width never moves. Optionally the city name above it and today's high and low beside it; a warning dot on the icon during a weather alert. The popup shows current conditions, alert banners, a 24-hour temperature line with rain chances, the daily forecast on one week-wide scale, and wind, humidity, UV, sunrise, sunset and pressure.
+
+- 🔑 **Your own key:** create one at openweathermap.org → *API keys* and paste it into *Applet settings*; **Test** saves it to the keyring and checks it. New keys can take up to 2 hours to activate.
+- 📡 **Two plans:** with the **One Call by Call** subscription (One Call API 4.0) you get hourly steps, 7 days, UV and alerts. A plain free key works too, with 3-hour steps, 5 days, and no UV or alerts. The applet detects which you have.
+- 💸 **Never charged:** One Call includes 1,000 free calls a day. A refresh costs 4 calls, so the 30-minute default uses about 200. The applet stops scheduled refreshes at 900 calls a UTC day. **Set your OpenWeather billing daily limit to 1,000** as well, so the account can never be charged.
+- 🏙️ **Up to 5 cities:** search by name; the radio picks the panel city. Only the panel city refreshes on schedule (15, 30 or 60 min, ±10 % jitter). The others refresh when you look at them, and the city you're viewing refreshes when the popup opens on data over 10 minutes old.
+- 🕒 **Local time everywhere:** hours, days, sunrise and sunset use the city's own time zone, not this machine's, and follow the COSMIC time applet's 12/24-hour setting.
+- 🎨 **Two icon sets, never mixed:** **Detailed** (24 conditions, including drizzle, heavy rain and wind, built into the binary) or **System** (COSMIC's own `weather-*` icons).
+- 💾 **Cache:** the last forecast per city is kept in `~/.cache/io.github.dc.CosmicAppletWeather/`, weather data only, and shown at startup with its age. Data over 12 hours old is discarded.
+- 🚦 **States:** no key, key not accepted, no locations, free plan, offline (dimmed, with the age), rate limited (with a countdown), daily limit reached, and polar day or night (`—` for sunrise and sunset).
+- ⚖️ **Attribution:** "Weather data: OpenWeather" is always on the popup, as OpenWeather requires.
+
+`just weather-demo` runs the popup in a window, cycling through every state every 10 s from the test fixtures, with no key and no network (`WEATHER_DEMO_SCENE=n` starts on scene *n*; `WEATHER_SHOT=file.pam` saves the window and exits). `just live-check` makes one real call per endpoint with your stored key and lists any fields that differ from the fixtures (never values).
+
+---
+
 ## 📦 Install
 
 Needs Rust (edition 2024) and the usual COSMIC build dependencies (`libxkbcommon`, `wayland`, `pkg-config`).
@@ -176,7 +212,7 @@ just build
 sudo just install           # → /usr/local
 ```
 
-Then add **Network Traffic**, **System Monitor** and/or **AI Usage** in *Settings → Desktop → Panel → Applets*.
+Then add **Network Traffic**, **System Monitor**, **AI Usage** and/or **Weather** in *Settings → Desktop → Panel → Applets*.
 
 <details>
 <summary>Installing without root</summary>
@@ -188,7 +224,7 @@ PREFIX=~/.local just install
 cosmic-panel launches applets with the session `PATH`, which usually lacks `~/.local/bin`. Point the desktop entries at the binaries:
 
 ```sh
-sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon,AiUsage}.desktop
+sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon,AiUsage,Weather}.desktop
 ```
 </details>
 
@@ -196,11 +232,13 @@ sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.
 | --- | --- |
 | `just build` | `cargo build --release` |
 | `just check` | clippy with `-D warnings`, and `cargo fmt --check` |
-| `just test` | unit tests: formatting, parsers against fixture files, hysteresis, config invariants, AI Usage's login and usage fixtures and refresh timing |
-| `just install` / `just uninstall` | binaries, desktop entries and icons under `$PREFIX` |
+| `just test` | unit tests: formatting, parsers against fixture files, hysteresis, config invariants, AI Usage's login and usage fixtures and refresh timing, Weather's parsers, icon mapping, free-plan aggregation and call budget |
+| `just install` / `just uninstall` | binaries, desktop entries and icons under `$PREFIX` (Weather installs no icon files) |
 | `just preview sysmon` | the popup in an ordinary window, no panel needed (`APPLET_PREVIEW=settings` opens the settings page) |
 | `just run net-traffic` | run with debug logs |
 | `just demo` | AI Usage's popup cycling through every state, without a login or network |
+| `just weather-demo` | the same for Weather, without a key or network |
+| `just live-check` | Weather: one real call per OpenWeather endpoint, compared with the fixtures |
 
 ---
 
@@ -213,6 +251,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | Network Traffic | `~/.config/cosmic/io.github.dc.CosmicAppletNetTraffic/v1/` | `mode`, `indicator`, `adapter` |
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
 | AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_session`, `show_weekly`, `show_fable`, `show_session_reset`, `style`, `amount`, `reset_format`, `refresh_minutes` |
+| Weather | `~/.config/cosmic/io.github.dc.CosmicAppletWeather/v1/` | `locations`, `panel_location`, `units`, `icon_set`, `show_city`, `show_hilo`, `refresh_minutes` (the API key is in the keyring, never here) |
 
 ---
 
@@ -224,16 +263,17 @@ crates/
   net-traffic/   the Network Traffic applet  (cosmic-applet-net-traffic)
   sysmon/        the System Monitor applet   (cosmic-applet-sysmon)
   ai-usage/      the AI Usage applet         (cosmic-applet-ai-usage)
+  weather/       the Weather applet          (cosmic-applet-weather)
 handoff/         the original design and spec packages (SPEC, DESIGN, ACCEPTANCE, prototype, screenshots)
 docs/            README images
 ```
 
-The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSysMon` and `io.github.dc.CosmicAppletAiUsage` are placeholders and should be changed before publishing to a distro.
+The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSysMon`, `io.github.dc.CosmicAppletAiUsage` and `io.github.dc.CosmicAppletWeather` are placeholders and should be changed before publishing to a distro.
 
 ---
 
 ## 📄 Licence
 
-GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons and the AI Usage robot are custom. The two AI Usage Cyborg avatars are cropped from illustrations supplied by the project owner, who holds the rights to distribute them here.
+GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons and the AI Usage robot are custom. The two AI Usage Cyborg avatars are cropped from illustrations supplied by the project owner, who holds the rights to distribute them here. Weather's Detailed icons are converted from the Pixeden "Weather App Icons" pack (`crates/weather/resources/icons/weather/LICENSE-PIXEDEN.txt`), included with Pixeden's permission and built into the binary rather than installed as files.
 
 <div align="center"><sub>ユタニ重工 · Yutani system monitoring</sub></div>

@@ -1,0 +1,15 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>WxCurrent — preview</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="current.html" aria-current="page">Current</a><a href="hourly.html">Hourly</a><a href="daily.html">7-day</a><a href="details.html">Details</a><a href="locations.html">Locations</a><a href="icon-sets.html">Icon sets</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage">
+  <div class="ca-popup" id="a"></div><div class="ca-popup" id="b"></div>
+</div>
+<script>
+  var A = window.CosmicApplets, a = A.wxSim(A.WX_LOCATIONS[0], 'metric'), b = A.wxSim(A.WX_LOCATIONS[1], 'metric');
+  document.getElementById('a').innerHTML = A.wxCurrentHTML(a);
+  document.getElementById('b').innerHTML = A.wxCurrentHTML(b) + A.wxAlertHTML(b);
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

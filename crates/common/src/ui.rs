@@ -138,7 +138,7 @@ pub fn radio_row<'a, M: Clone + 'static>(selected: bool, icon: Option<&'static s
 }
 
 /// 16 px radio: a 2 px ring, accent with an 8 px dot when selected.
-fn radio_dot<'a, M: 'a>(selected: bool) -> Element<'a, M> {
+pub fn radio_dot<'a, M: 'a>(selected: bool) -> Element<'a, M> {
     let dot = widget::container(widget::space().width(Length::Fixed(8.0)).height(Length::Fixed(8.0))).class(theme::Container::custom(move |t| {
         widget::container::Style {
             background: selected.then(|| cosmic::iced::Color::from(t.cosmic().accent.base).into()),
