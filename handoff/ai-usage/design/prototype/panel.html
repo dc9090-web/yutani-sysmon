@@ -1,0 +1,30 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>QuotaPanelButton — preview</title><style>/* desktop backdrop so the panel strip (bg) reads as a separate surface */ body { background: var(--bg-component); }</style></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html" aria-current="page">Panel button</a><a href="rows.html">Quota rows</a><a href="header.html">Header</a><a href="states.html">States</a><a href="icons.html">Icon study</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage" id="root"></div>
+<script>
+  var A = window.CosmicApplets, now = Date.now(), q = A.quotaSim(now), W = {}; q.windows.forEach(function (w) { W[w.key] = w; });
+  function clone(w, used) { var c = Object.assign({}, w); c.used = used; return c; }
+  var cases = [
+    { tag: 'Bars · all three (default)', ws: [W.session, W.weekly, W.fable], style: 'bars' },
+    { tag: 'Percent · Session + Weekly', ws: [W.session, W.weekly], style: 'percent' },
+    { tag: 'Both · + session reset', ws: [W.session, W.weekly], style: 'both', reset: true },
+    { tag: 'Percent · showing left', ws: [W.session, W.weekly, W.fable], style: 'percent', amount: 'left' },
+    { tag: 'Session limit reached', ws: [clone(W.session, 100), W.weekly], style: 'both', reset: true },
+    { tag: 'Vertical · bars (default) / percent', v: true, set: [{ ws: [W.session, W.weekly, W.fable], style: 'bars' }, { ws: [W.session, W.weekly, W.fable], style: 'percent' }] }
+  ];
+  var root = document.getElementById('root');
+  cases.forEach(function (c) {
+    var col = document.createElement('div'); col.className = 'col';
+    var html = '<span class="ca-tag">' + c.tag + '</span><div style="display:flex;gap:16px;align-items:flex-start">';
+    (c.set || [c]).forEach(function (cc) {
+      var inner = cc.ws.map(function (w) { return A.quotaChunkHTML(w, now, cc.style, c.amount); }).join('') + (cc.reset || c.reset ? A.resetChunkHTML(cc.ws[0], now) : '');
+      html += '<div class="ca-panel ' + (c.v ? 'v' : 'h') + '"><button class="ca-pbtn" aria-label="Claude usage"><span class="ca-icon i-robot ca-qicon" aria-hidden="true"></span><span class="ca-qrow">' + inner + '</span></button></div>';
+    });
+    col.innerHTML = html + '</div>'; root.appendChild(col);
+  });
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

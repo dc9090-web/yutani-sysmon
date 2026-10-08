@@ -1,0 +1,71 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>AI Usage — prototype</title>
+<style>
+  .proto { display:flex; flex-direction:column; align-items:center; gap:4px; padding:16px; }
+  .topbar { width:392px; display:flex; justify-content:flex-end; }
+  [hidden] { display:none !important; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html" aria-current="page">Prototype</a><a href="panel.html">Panel button</a><a href="rows.html">Quota rows</a><a href="header.html">Header</a><a href="states.html">States</a><a href="icons.html">Icon study</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="proto">
+  <div class="topbar"><div class="ca-panel h"><button class="ca-pbtn is-open" id="pbtn" aria-label="Claude usage" aria-expanded="true"><span id="chunks" style="display:contents"></span></button></div></div>
+  <div class="ca-popup" id="popup">
+    <section id="main">
+      <div class="ca-qhead"><span class="ca-icon i-robot ca-qicon" aria-hidden="true"></span><div class="meta"><span class="ca-heading">Claude <span class="ca-chip plan" id="plan"></span></span><span class="ca-caption" id="email"></span></div><span class="upd" id="upd"></span><button class="ca-iconbtn" id="refresh" aria-label="Refresh now"><span class="ca-icon i-refresh"></span></button></div>
+      <div class="ca-sep"></div>
+      <div id="rows"></div>
+      <div class="ca-sep"></div>
+      <button class="ca-menu" id="toSettings"><span class="ca-icon i-settings"></span><span class="grow">Applet settings</span><span class="ca-icon i-next"></span></button>
+    </section>
+    <section id="settings" hidden>
+      <div class="ca-subhead"><button class="ca-iconbtn" id="back" aria-label="Back"><span class="ca-icon i-back"></span></button><span class="ca-heading">Applet settings</span></div>
+      <div class="ca-sep full" style="margin:4px 0 8px"></div>
+      <div class="ca-pad ca-caption-heading">Show in panel</div>
+      <div id="toggles"></div>
+      <div class="ca-sep"></div>
+      <div id="segs"></div>
+    </section>
+  </div>
+</div>
+<script>
+  var A = window.CosmicApplets, $ = function (id) { return document.getElementById(id); };
+  var q = A.quotaSim(Date.now());
+  var state = JSON.parse(JSON.stringify(A.QUOTA_DEFAULTS));
+  var SEGS = [
+    { k: 'style', label: 'Panel style', opts: [['percent', 'Percent'], ['bars', 'Bars'], ['both', 'Both']] },
+    { k: 'amount', label: 'Show', opts: [['used', 'Used'], ['left', 'Left']] },
+    { k: 'reset', label: 'Reset times', opts: [['relative', 'Relative'], ['absolute', 'Clock time']] },
+    { k: 'every', label: 'Refresh every', opts: [['1', '1 min'], ['5', '5 min'], ['15', '15 min']] }
+  ];
+  function paintPanel() {
+    var now = Date.now();
+    $('chunks').innerHTML = A.quotaPanelHTML(q, now, state);
+    $('pbtn').title = q.windows.map(function (w) { return w.name + ' ' + Math.round(w.used) + '% used, ' + A.resetPhrase(w.resetAt, now, 'relative').toLowerCase(); }).join('; ');
+  }
+  function paintMain() {
+    var now = Date.now();
+    $('plan').textContent = q.plan; $('email').textContent = q.email; $('upd').textContent = 'Updated ' + A.agoText(q.updatedAt, now);
+    $('rows').innerHTML = q.windows.map(function (w) { return A.quotaRowHTML(w, now, { amount: state.amount, reset: state.reset }); }).join('');
+  }
+  function paintSettings() {
+    var rows = [['session', 'Session', '5-hour window'], ['weekly', 'Weekly', 'All models'], ['fable', 'Fable', 'Fable weekly limit']];
+    var on = rows.filter(function (r) { return state.show[r[0]]; }).length;
+    $('toggles').innerHTML = rows.map(function (r) { var last = on === 1 && state.show[r[0]];
+      return '<div class="ca-trow"><span class="grow"><span class="ca-body">' + r[1] + '</span><span class="ca-caption">' + r[2] + (last ? ' · at least one stays on' : '') + '</span></span><button class="ca-toggler" role="switch" aria-checked="' + state.show[r[0]] + '" aria-label="' + r[1] + '" data-w="' + r[0] + '"' + (last ? ' disabled' : '') + '></button></div>'; }).join('') +
+      '<div class="ca-trow"><span class="grow"><span class="ca-body">Session reset</span><span class="ca-caption">Time until the 5-hour window resets</span></span><button class="ca-toggler" role="switch" aria-checked="' + state.resetInPanel + '" aria-label="Session reset in panel" data-w="resetInPanel"></button></div>';
+    $('segs').innerHTML = SEGS.map(function (g, i) {
+      return (i ? '<div class="ca-sep"></div>' : '') + '<div class="ca-pad ca-caption-heading" id="sl' + i + '">' + g.label + '</div><div class="ca-pad"><div class="ca-seg" role="group" aria-labelledby="sl' + i + '" data-k="' + g.k + '">' +
+        g.opts.map(function (o) { return '<button data-v="' + o[0] + '" aria-pressed="' + (state[g.k] === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div></div>';
+    }).join('');
+  }
+  $('toggles').onclick = function (e) { var b = e.target.closest('[data-w]'); if (!b || b.disabled) return; var k = b.dataset.w; if (k === 'resetInPanel') state.resetInPanel = !state.resetInPanel; else state.show[k] = !state.show[k]; paintSettings(); paintPanel(); };
+  $('segs').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state[b.parentNode.dataset.k] = b.dataset.v; paintSettings(); paintPanel(); };
+  $('toSettings').onclick = function () { $('main').hidden = true; $('settings').hidden = false; paintSettings(); $('back').focus(); };
+  $('back').onclick = function () { $('settings').hidden = true; $('main').hidden = false; paintMain(); };
+  $('refresh').onclick = function () { q.updatedAt = Date.now(); paintMain(); };
+  $('pbtn').onclick = function () { var p = $('popup'), open = p.hidden; p.hidden = !open; this.classList.toggle('is-open', open); this.setAttribute('aria-expanded', open); };
+  paintPanel(); paintMain(); setInterval(function () { paintPanel(); if (!$('main').hidden) paintMain(); }, 30000);
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

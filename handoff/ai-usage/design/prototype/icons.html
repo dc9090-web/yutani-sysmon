@@ -1,0 +1,65 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>AI Usage icon options</title>
+<style>
+  /* desktop backdrop so the panel strip (bg) reads as a separate surface */
+  body { background: var(--bg-component); }
+  .grid { display:grid; grid-template-columns: 220px 72px 1fr; align-items:center; column-gap:24px; row-gap:10px; padding:16px 24px; }
+  .hdr { font:600 12px/17px var(--font-sans); color:var(--on-bg-muted); }
+  .name { display:flex; flex-direction:column; }
+  .name b { font:700 14px/21px var(--font-sans); color:var(--on-bg); }
+  .rule { grid-column:1/-1; height:1px; background:var(--component-divider); }
+  .big { width:48px; height:48px; color:var(--on-bg); display:block; }
+  .panels { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .qi { display:block; flex:none; color:var(--on-bg); }
+  .ca-panel.h .qi { width:20px; height:20px; }
+  .ca-panel.h.xs { height:32px; } .ca-panel.h.xs .ca-pbtn { height:32px; padding:0 12px; } .ca-panel.h.xs .qi { width:16px; height:16px; }
+  .ca-panel.v .qi { width:20px; height:20px; }
+  .ca-pbtn .ca-qrow { gap: var(--space-xs); }
+  .live-ok { stroke: var(--quota-fill); } .live-warn { stroke: var(--quota-warn); } .live-full { stroke: var(--quota-full); }
+  .pie-ok { fill: var(--quota-fill); } .pie-warn { fill: var(--quota-warn); } .pie-full { fill: var(--quota-full); }
+  .tag { font:400 12px/17px var(--font-sans); color:var(--on-bg-muted); }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="rows.html">Quota rows</a><a href="header.html">Header</a><a href="states.html">States</a><a href="icons.html" aria-current="page">Icon study</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="grid" id="g">
+  <span class="hdr">Icon</span><span class="hdr">48 px</span><span class="hdr">In the panel: size S (20 px) · XS (16 px) · vertical</span>
+</div>
+<script>
+  var A = window.CosmicApplets, now = Date.now(), q = A.quotaSim(now), W = q.windows;
+  var ST = 'fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"', F = 'fill="currentColor"';
+  function svg(inner, cls) { return '<svg class="' + (cls || 'qi') + '" viewBox="0 0 16 16" aria-hidden="true">' + inner + '</svg>'; }
+  function ring(p, lvl) { var r = 5.25, c = 2 * Math.PI * r, d = (Math.min(p, 100) / 100 * c).toFixed(2);
+    return '<circle cx="8" cy="8" r="' + r + '" ' + ST + ' stroke-width="2.25" opacity=".28"/>' +
+      '<circle cx="8" cy="8" r="' + r + '" fill="none" stroke-width="2.25" stroke-linecap="round" class="live-' + lvl + '" stroke-dasharray="' + d + ' ' + c.toFixed(2) + '" transform="rotate(-90 8 8)"/>'; }
+  function pie(p, lvl) { var a = Math.min(p, 99.9) / 100 * 2 * Math.PI, r = 4.25, x = 8 + r * Math.sin(a), y = 8 - r * Math.cos(a);
+    return '<circle cx="8" cy="8" r="6.5" ' + ST + ' stroke-width="1.5"/>' + '<path class="pie-' + lvl + '" d="M8 8 L8 ' + (8 - r) + ' A' + r + ' ' + r + ' 0 ' + (p > 50 ? 1 : 0) + ' 1 ' + x.toFixed(2) + ' ' + y.toFixed(2) + 'Z"/>'; }
+  var lvl = function (u) { return u >= 100 ? 'full' : u >= 80 ? 'warn' : 'ok'; };
+  var OPTS = [
+    { n: 'Robot · chosen', d: 'Chosen. Friendly, unmistakably "AI", no brand mark. Antenna, two eyes, mouth on the 16px grid.', s: function () { return '<path d="M8 1.6V3.75" ' + ST + ' stroke-width="1.4"/><circle cx="8" cy="1.6" r="1.1" ' + F + '/><rect x="2.6" y="3.85" width="10.8" height="9.15" rx="2.6" ' + ST + ' stroke-width="1.5"/><rect x=".6" y="6.9" width="1.3" height="3.2" rx=".65" ' + F + '/><rect x="14.1" y="6.9" width="1.3" height="3.2" rx=".65" ' + F + '/><circle cx="5.85" cy="7.7" r="1.25" ' + F + '/><circle cx="10.15" cy="7.7" r="1.25" ' + F + '/><path d="M6.1 10.6H9.9" ' + ST + ' stroke-width="1.3"/>'; } },
+    { n: 'Gauge', d: 'Quota dial. Reads as "level" at any size.', s: function () { return '<path d="M2.5 11.5A5.5 5.5 0 0 1 13.5 11.5" ' + ST + ' stroke-width="1.75"/><path d="M8 11.5L11.2 7" ' + ST + ' stroke-width="1.75"/><circle cx="8" cy="11.5" r="1.6" ' + F + '/>'; } },
+    { n: 'Hourglass', d: 'Leans into resets and time windows.', s: function () { return '<path d="M3.5 1.75H12.5M3.5 14.25H12.5" ' + ST + ' stroke-width="1.5"/><path d="M4.75 2C4.75 5.4 7.1 6.9 7.1 8S4.75 10.6 4.75 14M11.25 2C11.25 5.4 8.9 6.9 8.9 8S11.25 10.6 11.25 14" ' + ST + ' stroke-width="1.4"/><path d="M5.9 13.4C6.1 11.9 7.3 10.9 8 10.7C8.7 10.9 9.9 11.9 10.1 13.4Z" ' + F + '/><path d="M6.5 4.8H9.5C9.1 5.7 8.5 6.3 8 6.6C7.5 6.3 6.9 5.7 6.5 4.8Z" ' + F + '/>'; } },
+    { n: 'Chat meter', d: 'Conversation bubble with a fill gauge: "how much talk is left".', s: function () { return '<path d="M4 2.75H12A2.25 2.25 0 0 1 14.25 5V9A2.25 2.25 0 0 1 12 11.25H9L6 13.75V11.25H4A2.25 2.25 0 0 1 1.75 9V5A2.25 2.25 0 0 1 4 2.75Z" ' + ST + ' stroke-width="1.5"/><rect x="4.25" y="6.1" width="7.5" height="1.8" rx=".9" ' + F + ' opacity=".3"/><rect x="4.25" y="6.1" width="4.6" height="1.8" rx=".9" ' + F + '/>'; } },
+    { n: 'Token stack', d: 'Stacked coins: tokens as a spendable budget.', s: function () { return '<ellipse cx="8" cy="4" rx="5.25" ry="2" ' + ST + ' stroke-width="1.4"/><path d="M2.75 4V12C2.75 13.1 5.1 14 8 14S13.25 13.1 13.25 12V4M2.75 8C2.75 9.1 5.1 10 8 10S13.25 9.1 13.25 8" ' + ST + ' stroke-width="1.4"/>'; } },
+    { n: 'Tank', d: 'Battery-style capsule. Instantly reads as "remaining".', s: function () { return '<rect x="1.5" y="4.25" width="11.5" height="7.5" rx="2" ' + ST + ' stroke-width="1.5"/><rect x="13.75" y="6.25" width="1.5" height="3.5" rx=".6" ' + F + '/><rect x="3.4" y="6.15" width="5.2" height="3.7" rx=".8" ' + F + '/>'; } },
+    { n: 'Ring · live', d: 'Progress ring that IS the Session %. Fills and changes colour (80% orange, 100% red).', live: true, s: function (u) { return ring(u, lvl(u)); } },
+    { n: 'Pie clock · live', d: 'Clock face whose wedge shows Session % used. Combines time window + usage.', live: true, s: function (u) { return pie(u, lvl(u)); } },
+    { n: 'COSMIC chat', d: 'Stock cosmic-icons chat-symbolic. Native, but says "messages", not "quota".', s: function () { return '<path d="M3 2C1.9 2 1 2.9 1 4V9C1 10.1 1.9 11 3 11H13C14.1 11 15 10.1 15 9V4C15 2.9 14.1 2 13 2H3ZM3 3H13C13.55 3 14 3.45 14 4V9C14 9.55 13.55 10 13 10H3C2.45 10 2 9.55 2 9V4C2 3.45 2.45 3 3 3Z" ' + F + '/><path d="M12 11L10 13L8 11H12Z" ' + F + '/><path d="M4 5H12V6H4ZM4 7H12V8H4Z" ' + F + '/>'; } }
+  ];
+  var g = document.getElementById('g');
+  OPTS.forEach(function (o, i) {
+    var sess = W[0], chunks = i === 0 ? W.map(function (w) { return A.quotaChunkHTML(w, now, 'bars'); }).join('') : A.quotaChunkHTML(W[0], now, 'percent') + A.quotaChunkHTML(W[1], now, 'percent');
+    var icon = function (u) { return svg(o.s(u)); };
+    var hot = Object.assign({}, W[0], { used: 87 }), full = Object.assign({}, W[0], { used: 100 });
+    var panels = '<div class="ca-panel h"><button class="ca-pbtn" aria-label="Claude usage">' + icon(sess.used) + '<span class="ca-qrow">' + chunks + '</span></button></div>' +
+      '<div class="ca-panel h xs"><button class="ca-pbtn" aria-label="Claude usage">' + icon(sess.used) + '</button></div>' +
+      (o.live ? '<div class="ca-panel h"><button class="ca-pbtn" aria-label="Claude usage">' + icon(87) + '<span class="ca-qrow">' + A.quotaChunkHTML(hot, now, 'percent') + '</span></button></div>' +
+                '<div class="ca-panel h"><button class="ca-pbtn" aria-label="Claude usage">' + icon(100) + '<span class="ca-qrow">' + A.quotaChunkHTML(full, now, 'percent') + '</span></button></div>' : '') +
+      '<div class="ca-panel v"><button class="ca-pbtn" aria-label="Claude usage">' + icon(sess.used) + '<span class="ca-qrow">' + A.quotaChunkHTML(W[0], now, 'percent') + '</span></button></div>';
+    var row = document.createElement('div'); row.style.display = 'contents';
+    row.innerHTML = '<div class="rule"></div><div class="name"><b>' + 'IABCDEFGH'[i] + ' · ' + o.n + '</b><span class="tag">' + o.d + '</span></div>' + svg(o.s(sess.used), 'big') + '<div class="panels">' + panels + '</div>';
+    g.appendChild(row);
+  });
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

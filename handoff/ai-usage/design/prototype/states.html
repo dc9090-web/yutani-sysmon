@@ -1,0 +1,21 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>AI Usage states</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="rows.html">Quota rows</a><a href="header.html">Header</a><a href="states.html" aria-current="page">States</a><a href="icons.html">Icon study</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage" id="root"></div>
+<script>
+  var A = window.CosmicApplets, now = Date.now(), q = A.quotaSim(now), root = document.getElementById('root');
+  function head(plan, upd, cls) { return '<div class="ca-qhead"><span class="ca-icon i-robot ca-qicon" aria-hidden="true"></span><div class="meta"><span class="ca-heading">Claude' + (plan ? ' <span class="ca-chip plan">' + plan + '</span>' : '') + '</span><span class="ca-caption">' + (plan ? 'dc@example.com' : 'Not signed in') + '</span></div><span class="upd' + (cls ? ' ' + cls : '') + '">' + upd + '</span><button class="ca-iconbtn" aria-label="Refresh now"><span class="ca-icon i-refresh"></span></button></div><div class="ca-sep"></div>'; }
+  function banner(t, body, btn) { return '<div class="ca-banner"><span class="ca-body">' + t + '</span><span class="ca-caption">' + body + '</span>' + (btn ? '<button class="ca-btn">' + btn + '</button>' : '') + '</div>'; }
+  function rows(opt, ws) { return (ws || q.windows).map(function (w) { return A.quotaRowHTML(w, now, opt || {}); }).join(''); }
+  var cases = [
+    ['Not signed in (no Claude Code login found)', head(null, ''), banner('Sign in with Claude Code', 'Run <code>claude</code> in a terminal and log in. This applet reads that login and updates automatically.')],
+    ['Login expired', head('Max', 'Updated 3h ago', 'ca-warn'), banner('Claude Code login expired', 'Open Claude Code once to renew it. Showing the last values.') + rows({ stale: true })],
+    ['Offline / rate limited (stale data)', head('Max', 'Offline · 25m ago', 'ca-warn'), rows({ stale: true })],
+    ['Plan without a Fable limit', head('Pro', 'Updated just now'), rows({}, q.windows.slice(0, 2)) + '<div class="ca-pad ca-caption">No Fable limit on this plan.</div>']
+  ];
+  cases.forEach(function (c) { var el = document.createElement('div'); el.className = 'col'; el.innerHTML = '<span class="ca-tag">' + c[0] + '</span><div class="ca-popup">' + c[1] + c[2] + '</div>'; root.appendChild(el); });
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

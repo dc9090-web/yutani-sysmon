@@ -7,7 +7,7 @@
 
 <br>
 
-**Two tiny, native COSMIC panel applets: live network traffic, and CPU, AMD GPU, memory and disk at a glance.**
+**Three tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; and your Claude usage limits.**
 
 Straight from procfs and sysfs. No system-stats crates, no daemon, no polling of anything you aren't looking at. One read pass a second, about 0.1 % of one core, and less memory than COSMIC's own clock.
 
@@ -32,8 +32,9 @@ Straight from procfs and sysfs. No system-stats crates, no daemon, no polling of
 | --- | --- | --- |
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
 | 🖥️ | **System Monitor** | CPU, AMD GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
+| 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Reuses Claude Code's login, read-only. |
 
-They are two separate applets, each with its own panel slot, settings and process. You can add one, the other, or both.
+They are separate applets, each with its own panel slot, settings and process. Add any combination.
 
 ---
 
@@ -56,6 +57,7 @@ Measured on a Ryzen 9 3950X with an RX 9070 XT over 30 s on the live panel:
 | --- | --- | --- |
 | Network Traffic | ~0.1 % of one core | 25.0 MB |
 | System Monitor | ~0.1 % of one core | 24.7 MB |
+| AI Usage | ~0.1 % of one core (one request every 5 min) | 31.2 MB |
 | *stock COSMIC clock applet* | – | 28.8 MB |
 
 ---
@@ -130,6 +132,21 @@ The applet picks it up within 30 s, with no restart. To undo it, delete the rule
 
 ---
 
+## 🤖 AI Usage
+
+A robot, then one small bar per window: **5h** (Session), **Week** and **Fable**, in that order. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 2h 13m" or "Resets Sat 9:00 AM") and pace ("14% under pace").
+
+- **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the 5-hour window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
+- **Login:** it reads Claude Code's own login (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`). It **never writes, refreshes or rotates it**; when the login expires, run `claude` once and the applet picks it up within seconds.
+- **Network:** one `GET https://api.anthropic.com/api/oauth/usage` every 1, 5 or 15 minutes (±10 % jitter), on opening the popup if the data is over a minute old, and just after each window resets. It backs off while offline and honours `Retry-After`. No telemetry and no usage cache on disk.
+- **Undocumented endpoint:** if its format changes, the popup says "Usage format not recognised" and **Copy diagnostics** copies the HTTP status and the JSON key names only, never values or the token.
+- **States:** not signed in, login expired, offline, rate limited, format not recognised and no Fable limit each have their own banner or header text; stale values are dimmed.
+- **Clock time** follows the COSMIC time applet's 12/24-hour setting.
+
+`just demo` runs the popup in a window, cycling through every state every 10 s from the test fixtures, with no login and no network (`AI_USAGE_DEMO_SCENE=n` starts on scene *n*).
+
+---
+
 ## 📦 Install
 
 Needs Rust (edition 2024) and the usual COSMIC build dependencies (`libxkbcommon`, `wayland`, `pkg-config`).
@@ -141,7 +158,7 @@ just build
 sudo just install           # → /usr/local
 ```
 
-Then add **Network Traffic** and/or **System Monitor** in *Settings → Desktop → Panel → Applets*.
+Then add **Network Traffic**, **System Monitor** and/or **AI Usage** in *Settings → Desktop → Panel → Applets*.
 
 <details>
 <summary>Installing without root</summary>
@@ -150,10 +167,10 @@ Then add **Network Traffic** and/or **System Monitor** in *Settings → Desktop 
 PREFIX=~/.local just install
 ```
 
-cosmic-panel launches applets with the session `PATH`, which usually lacks `~/.local/bin`. Point the two desktop entries at the binaries:
+cosmic-panel launches applets with the session `PATH`, which usually lacks `~/.local/bin`. Point the desktop entries at the binaries:
 
 ```sh
-sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon}.desktop
+sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon,AiUsage}.desktop
 ```
 </details>
 
@@ -165,6 +182,7 @@ sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.
 | `just install` / `just uninstall` | binaries, desktop entries and icons under `$PREFIX` |
 | `just preview sysmon` | the popup in an ordinary window, no panel needed (`APPLET_PREVIEW=settings` opens the settings page) |
 | `just run net-traffic` | run with debug logs |
+| `just demo` | AI Usage's popup cycling through every state, without a login or network |
 
 ---
 
@@ -176,6 +194,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | --- | --- | --- |
 | Network Traffic | `~/.config/cosmic/io.github.dc.CosmicAppletNetTraffic/v1/` | `mode`, `indicator`, `adapter` |
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
+| AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `show_session`, `show_weekly`, `show_fable`, `show_session_reset`, `style`, `amount`, `reset_format`, `refresh_minutes` |
 
 ---
 
@@ -186,16 +205,17 @@ crates/
   common/        shared: formatting, 60-slot rings, sysfs readers, graph canvas, theme inks, popup pieces
   net-traffic/   the Network Traffic applet  (cosmic-applet-net-traffic)
   sysmon/        the System Monitor applet   (cosmic-applet-sysmon)
+  ai-usage/      the AI Usage applet         (cosmic-applet-ai-usage)
 handoff/         the original design and spec packages (SPEC, DESIGN, ACCEPTANCE, prototype, screenshots)
 docs/            README images
 ```
 
-The App IDs `io.github.dc.CosmicAppletNetTraffic` and `io.github.dc.CosmicAppletSysMon` are placeholders and should be changed before publishing to a distro.
+The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSysMon` and `io.github.dc.CosmicAppletAiUsage` are placeholders and should be changed before publishing to a distro.
 
 ---
 
 ## 📄 Licence
 
-GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons are custom.
+GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons and the AI Usage robot are custom.
 
 <div align="center"><sub>ユタニ重工 · Yutani system monitoring</sub></div>

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=AI Usage
+Comment=Claude session, weekly and Fable limits with reset times
+Type=Application
+Exec=cosmic-applet-ai-usage
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Applet;Claude;AI;Usage;Quota;Limit;
+Icon=io.github.dc.CosmicAppletAiUsage-symbolic
+StartupNotify=true
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicShrinkable=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

@@ -18,6 +18,8 @@ pub enum Ink {
     Purple,
     /// `palette.accent_green`: memory.
     Green,
+    /// `accent.base`: the user's accent (quota fill).
+    Accent,
     /// `on-bg-muted`: neutral 7 (dark) / 6 (light).
     Muted,
     Warning,
@@ -43,6 +45,7 @@ impl Ink {
             Ink::Indigo => c.palette.accent_indigo,
             Ink::Purple => c.palette.accent_purple,
             Ink::Green => c.palette.accent_green,
+            Ink::Accent => c.accent.base,
             Ink::Muted => {
                 if c.is_dark {
                     c.palette.neutral_7
@@ -75,6 +78,7 @@ impl Ink {
             Ink::Indigo => f!(Ink::Indigo),
             Ink::Purple => f!(Ink::Purple),
             Ink::Green => f!(Ink::Green),
+            Ink::Accent => f!(Ink::Accent),
             Ink::Muted => f!(Ink::Muted),
             Ink::Warning => f!(Ink::Warning),
             Ink::Destructive => f!(Ink::Destructive),

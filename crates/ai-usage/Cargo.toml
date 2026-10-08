@@ -1,0 +1,25 @@
+[package]
+name = "cosmic-applet-ai-usage"
+description = "COSMIC panel applet: Claude session, weekly and Fable usage limits with reset times"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+# `AI_USAGE_DEMO=1` cycles through every state without a login or network.
+demo = []
+
+[dependencies]
+common.workspace = true
+libcosmic.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+notify = { version = "8", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
+serde_json = "1"
+tokio = { version = "1", features = ["time", "macros"] }
