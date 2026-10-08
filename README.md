@@ -9,7 +9,7 @@
 
 **Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
 
-The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. Each applet costs about 0.1 % of one core.
+The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
 
 [![Rust](https://img.shields.io/badge/Rust-2024-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![COSMIC](https://img.shields.io/badge/COSMIC-1.10-3b82f6)](https://system76.com/cosmic)
@@ -58,7 +58,7 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 🔑 | **Hands off your login** | AI Usage opens Claude Code's credentials read-only and never refreshes the token, so it can't log Claude Code out. |
 | 🔒 | **No privileges, except one helper** | The applets never call `sudo` or `pkexec` or write to sysfs; root-only counters show `—`. The one exception is VPN's torrent tunnel: a small D-Bus-activated root helper, sandboxed by systemd and guarded by polkit, that only builds the namespace and starts qBittorrent in it. |
 
-Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the system applets; 6 min, startup included, for AI Usage):
+Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the system applets; 6 min, startup included, for AI Usage; 60 s for VPN):
 
 | | CPU | Memory (RSS) |
 | --- | --- | --- |
@@ -66,6 +66,7 @@ Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the s
 | System Monitor | ~0.1 % of one core | 24.7 MB |
 | AI Usage | ~0.1 % of one core (one request every 5 min) | 31.2 MB |
 | Weather | idle between refreshes (one city every 30 min) | 32.7 MB |
+| VPN | ~0.1 % of one core (both tunnels off) | 30.5 MB |
 | *stock COSMIC clock applet* | – | 28.8 MB |
 
 ---
@@ -222,7 +223,7 @@ Two independent switches, each backed by its own Proton WireGuard `.conf`:
 - 🌐 **All web traffic:** a NetworkManager WireGuard connection, imported once, with IPv6 routed into the tunnel so it can't leak around it. NetworkManager stays the source of truth, so toggling it in COSMIC Settings works too.
 - 🔀 **Both at once:** the torrent tunnel's encrypted packets carry a firewall mark that routes them past the web tunnel, so torrents keep their own exit and port.
 - 🚨 **Leak detection:** a qBittorrent started any other way is spotted within 10 s (red dot and a banner); **Restart in VPN** moves it inside. Only qBittorrent started from the applet is protected, and other torrent clients aren't detected.
-- 🎯 **Panel:** the reticle (first chevron = torrents, second = web), `P2P` / `WEB` / `PORT` chunks that never change width, and an amber or red dot when something needs attention. **Mono** or **Neon** icon style.
+- 🎯 **Panel:** the reticle (first chevron = torrents, second = web), `P2P` / `WEB` / `PORT` chunks that never change width, and an amber or red dot when something needs attention. Either chunk can be hidden while its tunnel is off. **Mono** or **Neon** icon style.
 - 🔐 **Secrets:** private keys are parsed only to validate them, then go to the root helper (stored 0600 in `/etc/cosmic-vpn/`) or to NetworkManager. They are never logged, shown or kept in config. The qBittorrent Web UI password lives in the keyring.
 
 **Setup:** download two configs from account.protonvpn.com → Downloads → WireGuard (one **P2P** server with **NAT-PMP on** and **Moderate NAT off** for torrents, any server for web). In qBittorrent, enable the Web UI on port 8080 and turn off its own UPnP/NAT-PMP. Then:
@@ -270,7 +271,7 @@ sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.
 | --- | --- |
 | `just build` | `cargo build --release` |
 | `just check` | clippy with `-D warnings`, and `cargo fmt --check` |
-| `just test` | unit tests: formatting, parsers against fixture files, hysteresis, config invariants, AI Usage's login and usage fixtures and refresh timing, Weather's parsers, icon mapping, free-plan aggregation and call budget |
+| `just test` | unit tests: formatting, parsers against fixture files, hysteresis, config invariants, AI Usage's login and usage fixtures and refresh timing, Weather's parsers, icon mapping, free-plan aggregation and call budget, VPN's conf parser, NAT-PMP codec, state mapping and qBittorrent conf editor |
 | `just install` / `just uninstall` | binaries, desktop entries and icons under `$PREFIX` (Weather installs no icon files) |
 | `just preview sysmon` | the popup in an ordinary window, no panel needed (`APPLET_PREVIEW=settings` opens the settings page) |
 | `just run net-traffic` | run with debug logs |
@@ -280,6 +281,7 @@ sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.
 | `just vpn-demo` | VPN's popup cycling through every state, with a fake helper and NetworkManager |
 | `just vpn-check-conf <files>` | VPN: what the parser makes of your Proton configs, key never shown |
 | `just vpn-helper-install` / `vpn-helper-uninstall` | VPN's root helper and its system files (sudo) |
+| `just vpn-acceptance` | VPN: live leak and kill-switch checks against a running torrent tunnel (sudo) |
 
 ---
 
@@ -292,7 +294,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | Network Traffic | `~/.config/cosmic/io.github.dc.CosmicAppletNetTraffic/v1/` | `mode`, `indicator`, `adapter` |
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
 | AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_session`, `show_weekly`, `show_fable`, `show_session_reset`, `style`, `amount`, `reset_format`, `refresh_minutes` |
-| VPN | `~/.config/cosmic/io.github.dc.CosmicAppletVpn/v1/` | `p2p_conf`, `web_conf`, `web_nm_uuid`, `launch_qbit`, `quit_qbit`, `auto_port`, `webui_port`, `webui_user`, `show_port`, `restore`, `last_p2p`, `last_web`, `qbit_command`, `icon_style` (no keys or passwords) |
+| VPN | `~/.config/cosmic/io.github.dc.CosmicAppletVpn/v1/` | `p2p_conf`, `web_conf`, `web_nm_uuid`, `launch_qbit`, `quit_qbit`, `auto_port`, `webui_port`, `webui_user`, `show_port`, `show_p2p_off`, `show_web_off`, `restore`, `last_p2p`, `last_web`, `qbit_command`, `icon_style` (no keys or passwords) |
 | Weather | `~/.config/cosmic/io.github.dc.CosmicAppletWeather/v1/` | `locations`, `panel_location`, `units`, `icon_set`, `show_city`, `show_hilo`, `refresh_minutes` (the API key is in the keyring, never here) |
 
 ---
@@ -319,6 +321,6 @@ The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSys
 
 ## 📄 Licence
 
-GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons and the AI Usage robot are custom. The two AI Usage Cyborg avatars are cropped from illustrations supplied by the project owner, who holds the rights to distribute them here. Weather's Detailed icons are converted from the Pixeden "Weather App Icons" pack (`crates/weather/resources/icons/weather/LICENSE-PIXEDEN.txt`), included with Pixeden's permission and built into the binary rather than installed as files.
+GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons, the AI Usage robot and VPN's four reticles are custom. The two AI Usage Cyborg avatars are cropped from illustrations supplied by the project owner, who holds the rights to distribute them here. Weather's Detailed icons are converted from the Pixeden "Weather App Icons" pack (`crates/weather/resources/icons/weather/LICENSE-PIXEDEN.txt`), included with Pixeden's permission and built into the binary rather than installed as files.
 
 <div align="center"><sub>ユタニ重工 · Yutani system monitoring</sub></div>

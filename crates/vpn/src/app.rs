@@ -62,6 +62,8 @@ pub enum Toggle {
     Quit,
     AutoPort,
     ShowPort,
+    ShowP2pOff,
+    ShowWebOff,
     Restore,
 }
 
@@ -475,7 +477,13 @@ impl App {
             let (key, tone) = model::chunk(state);
             Chunk { label, value: fl_word(key), tone, chars: 3.0 }
         };
-        let mut v = vec![mk(fl!("panel-p2p"), p.state), mk(fl!("panel-web"), w.state)];
+        let mut v = Vec::new();
+        if model::show_chunk(p.state, self.config.show_p2p_off) {
+            v.push(mk(fl!("panel-p2p"), p.state));
+        }
+        if model::show_chunk(w.state, self.config.show_web_off) {
+            v.push(mk(fl!("panel-web"), w.state));
+        }
         if let Some(port) = model::port_chunk(&p, self.config.show_port) {
             v.push(Chunk { label: fl!("panel-port"), value: port.to_string(), tone: Tone::Busy, chars: 5.0 });
         }
@@ -937,6 +945,8 @@ impl App {
             .push(ui::inset_divider())
             .push(ui::group_label(fl!("sec-panel")))
             .push(self.toggle_row(Toggle::ShowPort, fl!("set-show-port"), fl!("set-show-port-cap"), self.config.show_port))
+            .push(self.toggle_row(Toggle::ShowP2pOff, fl!("set-show-p2p-off"), fl!("set-show-p2p-off-cap"), self.config.show_p2p_off))
+            .push(self.toggle_row(Toggle::ShowWebOff, fl!("set-show-web-off"), fl!("set-show-web-off-cap"), self.config.show_web_off))
             .push(applet::padded_control(Column::new().spacing(space_xxs()).push(widget::text::body(fl!("set-icon-style"))).push(
                 widget::segmented_control::horizontal(&self.icon_model).button_padding([space_xxxs(), 0, space_xxxs(), 0]).on_activate(Message::IconStyle),
             )))
@@ -966,6 +976,8 @@ impl App {
         self.config.web_nm_uuid = s.web_conf.map(|_| "demo".into());
         self.config.icon_style = s.icon_style;
         self.config.show_port = true;
+        self.config.show_p2p_off = true;
+        self.config.show_web_off = true;
         self.page = s.page;
         self.test = s.test;
         self.qbit_cmd = Some(qbit::Command { argv: vec!["/usr/bin/qbittorrent".into()], conf: Default::default(), display: "qbittorrent".into() });
@@ -1509,6 +1521,8 @@ impl cosmic::Application for App {
                     return self.push_port();
                 }
                 Toggle::ShowPort => self.save(|c, h| c.set_show_port(h, on)),
+                Toggle::ShowP2pOff => self.save(|c, h| c.set_show_p2p_off(h, on)),
+                Toggle::ShowWebOff => self.save(|c, h| c.set_show_web_off(h, on)),
                 Toggle::Restore => self.save(|c, h| c.set_restore(h, on)),
             },
             Message::Edit(f, s) => match f {

@@ -31,6 +31,10 @@ pub struct Config {
     /// Empty: qBittorrent's "Bypass authentication for clients on localhost".
     pub webui_user: String,
     pub show_port: bool,
+    /// Off: the `P2P` chunk leaves the panel while the torrent tunnel is off.
+    pub show_p2p_off: bool,
+    /// Off: the `WEB` chunk leaves the panel while the web tunnel is off.
+    pub show_web_off: bool,
     pub restore: bool,
     pub last_p2p: bool,
     pub last_web: bool,
@@ -51,6 +55,8 @@ impl Default for Config {
             webui_port: 8080,
             webui_user: "admin".to_owned(),
             show_port: true,
+            show_p2p_off: true,
+            show_web_off: true,
             restore: true,
             last_p2p: false,
             last_web: false,
@@ -98,7 +104,7 @@ mod tests {
     #[test]
     fn defaults() {
         let d = Config::default();
-        assert!(d.launch_qbit && d.quit_qbit && d.auto_port && d.show_port && d.restore);
+        assert!(d.launch_qbit && d.quit_qbit && d.auto_port && d.show_port && d.show_p2p_off && d.show_web_off && d.restore);
         assert!(!d.last_p2p && !d.last_web);
         assert_eq!((d.webui_port, d.webui_user.as_str(), d.icon_style), (8080, "admin", IconStyle::Mono));
         assert_eq!(d.clone().enforce(), d);

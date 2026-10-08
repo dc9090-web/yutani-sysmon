@@ -79,6 +79,12 @@ pub fn chunk(state: TunnelState) -> (&'static str, Tone) {
     }
 }
 
+/// Whether a tunnel's chunk is in the panel: always, unless it's off and the
+/// user hid it for that case (connecting, errors and stale still show).
+pub fn show_chunk(state: TunnelState, show_when_off: bool) -> bool {
+    show_when_off || state != TunnelState::Off
+}
+
 /// The `PORT` chunk: shown only when asked for, torrents are on and a port is mapped.
 pub fn port_chunk(p2p: &Status, show_port: bool) -> Option<u16> {
     (show_port && p2p.state == TunnelState::On && p2p.port_state == PortState::Ok && p2p.port != 0).then_some(p2p.port)
@@ -145,6 +151,11 @@ mod tests {
         assert_eq!(chunk(TunnelState::On), ("panel-on", Tone::On));
         assert_eq!(chunk(TunnelState::Stale), ("panel-on", Tone::Warn));
         assert_eq!(chunk(TunnelState::Error), ("panel-error", Tone::Err));
+        assert!(show_chunk(TunnelState::Off, true));
+        assert!(!show_chunk(TunnelState::Off, false));
+        for s in [TunnelState::Connecting, TunnelState::On, TunnelState::Stale, TunnelState::Error] {
+            assert!(show_chunk(s, false));
+        }
         assert_eq!(port_chunk(&p2p(TunnelState::On), true), Some(53186));
         assert_eq!(port_chunk(&p2p(TunnelState::On), false), None);
         assert_eq!(port_chunk(&p2p(TunnelState::Stale), true), None);
