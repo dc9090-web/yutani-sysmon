@@ -1,0 +1,65 @@
+{
+  "p2p_natpmp_on.conf": {
+    "ok": true,
+    "server_label": "NL#256",
+    "endpoint": "185.107.56.23:51820",
+    "addr_v4": "10.2.0.2/32",
+    "has_v6": false,
+    "dns": [
+      "10.2.0.1"
+    ],
+    "natpmp_hint": "on",
+    "moderate_nat_hint": "off"
+  },
+  "p2p_natpmp_on_v6.conf": {
+    "ok": true,
+    "server_label": "NL#256",
+    "has_v6": true,
+    "dns": [
+      "10.2.0.1",
+      "2a07:b944::2:1"
+    ]
+  },
+  "web_ch12.conf": {
+    "ok": true,
+    "server_label": "CH#12",
+    "endpoint": "146.70.226.194:51820",
+    "natpmp_hint": "off"
+  },
+  "natpmp_off.conf": {
+    "ok": true,
+    "server_label": "NL#12",
+    "natpmp_hint": "off"
+  },
+  "moderate_nat_on.conf": {
+    "ok": true,
+    "moderate_nat_hint": "on"
+  },
+  "no_comments.conf": {
+    "ok": true,
+    "server_label": "no_comments",
+    "natpmp_hint": "unknown",
+    "moderate_nat_hint": "unknown"
+  },
+  "redacted_key.conf": {
+    "ok": false,
+    "error": "err-no-key",
+    "note": "Structure-only check mode (`common::conf::parse_structure`) must ACCEPT this file so DC can verify his real configs with the key redacted."
+  },
+  "invalid_postup.conf": {
+    "ok": false,
+    "error": "err-scripts"
+  },
+  "invalid_split_tunnel.conf": {
+    "ok": false,
+    "error": "err-no-default"
+  },
+  "invalid_two_peers.conf": {
+    "ok": false,
+    "error": "err-peers"
+  },
+  "invalid_not_wireguard.conf": {
+    "ok": false,
+    "error": "err-not-wg"
+  }
+}

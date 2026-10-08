@@ -1,0 +1,127 @@
+## Panel
+panel-p2p = P2P
+panel-web = WEB
+panel-port = PORT
+panel-on = ON
+panel-off = OFF
+panel-connecting = …
+panel-error = ERR
+panel-tooltip = VPN · Torrents { $p2p } · Web { $web }
+panel-tooltip-port = , port { $port }
+panel-tooltip-leak = · qBittorrent outside VPN
+
+## Header
+title = ProtonVPN · WireGuard
+head-none = Not protected
+head-p2p = Torrent tunnel on
+head-web = Web tunnel on
+head-both = Both tunnels on
+head-warn = Check the torrent tunnel
+head-leak = Leak: qBittorrent outside the VPN
+head-error = A tunnel failed to connect
+
+## Cards
+card-p2p-title = Torrents · qBittorrent
+card-web-title = All web traffic
+card-p2p-caption = { $server } · P2P
+card-web-caption = { $server } · NetworkManager
+switch-p2p = Torrent tunnel
+switch-web = Web tunnel
+st-off = Off
+st-connecting = Connecting…
+st-on = Connected · { $ago }
+st-stale = No handshake for { $dur } · reconnecting…
+st-handshake-timeout = No handshake from { $server } · check the server or your connection
+ago-s = { $n }s ago
+ago-m = { $n }m ago
+dur-s = { $n }s
+dur-m = { $n }m
+row-port = Forwarded port
+row-qbit = qBittorrent
+row-listen = Listening port
+port-requesting = Requesting…
+port-unavailable = Unavailable
+port-unavailable-why = not a P2P server
+port-renewed-tip = NAT-PMP lease renewed every 45 s
+copy-port = Copy port
+port-copied = Port { $port } copied
+qbit-vpn = Running in VPN
+qbit-starting = Starting in VPN…
+qbit-outside = Running outside VPN
+qbit-stopped = Not running
+qbit-missing = Not installed
+qbit-launch = Launch in VPN
+listen-set = Set to { $port }
+listen-manual = Set manually
+listen-manual-why = WebUI off
+listen-pending = Applied when qBittorrent starts
+note-p2p-off = qBittorrent stays closed while this is off.
+note-armed = Kill switch armed · nothing leaves qBittorrent until the tunnel is up.
+note-killswitch = Kill switch on · qBittorrent can only reach the internet through this tunnel. If it drops, torrents stop.
+note-outside = The kill switch only covers qBittorrent started from this applet.
+note-both = Torrents keep their own tunnel and port.
+card-no-config = No config · Import in settings
+web-other-vpn = Another VPN is active
+
+## Leak banner
+leak-title = qBittorrent is running outside the VPN
+leak-body = It was started normally, so it uses your real connection. Quit it and relaunch inside the tunnel.
+leak-restart = Restart in VPN
+leak-closing = Closing qBittorrent…
+
+## Dialogs and toasts
+confirm-quit-title = qBittorrent is still running
+confirm-quit-body = Quit it and turn off the torrent tunnel?
+confirm-quit = Quit
+cancel = Cancel
+toast-denied = Permission denied
+toast-qbit-failed = qBittorrent failed to start (exit { $code })
+
+## Banners
+banner-import-title = Import your Proton WireGuard configs
+banner-import-body = Download two configs from account.protonvpn.com → Downloads → WireGuard: one P2P server with NAT-PMP (port forwarding) on, one for web.
+banner-import-btn = Import configs
+banner-helper-title = System helper missing
+banner-helper-body = The torrent tunnel and kill switch need the cosmic-vpn-helper service (root). Install the package, then reopen the applet.
+
+## Settings
+settings = Applet settings
+sec-configs = WireGuard configs
+cfg-none = No config imported
+cfg-import = Import .conf
+cfg-replace = Replace config
+flag-natpmp-ok = NAT-PMP ✓
+flag-natpmp-unknown = NAT-PMP ?
+flag-natpmp-no = No NAT-PMP
+flag-moderate-nat = Moderate NAT on · port forwarding won't work
+flag-p2p = P2P
+flag-killswitch = Kill switch · namespace
+flag-in-nm = In NetworkManager ✓
+cfg-help = Private keys are copied to root-only files and never shown. Turn a tunnel off to replace its config.
+err-not-wg = Not a WireGuard config
+err-no-key = Missing or invalid PrivateKey
+err-no-default = AllowedIPs must include 0.0.0.0/0
+err-scripts = Scripts (PostUp…) are not allowed
+err-peers = Exactly one [Peer] is required
+sec-qbit = qBittorrent
+set-launch = Launch with torrent tunnel
+set-launch-cap = Starts qBittorrent inside the tunnel
+set-quit = Quit when tunnel turns off
+set-quit-cap = Asks qBittorrent to close first
+set-autoport = Set listening port automatically
+set-autoport-cap = Uses the Web UI on 127.0.0.1
+set-webui-port = Web UI port
+set-webui-user = Username
+set-webui-pass = Password
+webui-ok = ✓ Web UI reachable · password in the system keyring
+webui-unreachable = Web UI not reachable · enable it in qBittorrent → Options → Web UI
+webui-auth = Web UI login failed
+webui-not-running = Start qBittorrent to test
+manual-help = Copy the forwarded port into qBittorrent → Options → Connection, and turn off UPnP / NAT-PMP there.
+set-qbit-cmd = qBittorrent command
+sec-panel = Panel
+set-show-port = Show forwarded port
+set-show-port-cap = Next to P2P / WEB
+sec-startup = Startup
+set-restore = Restore tunnels at login
+set-restore-cap = Turns back on whatever was on at logout

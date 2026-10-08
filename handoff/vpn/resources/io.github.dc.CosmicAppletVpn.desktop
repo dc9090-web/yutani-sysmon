@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=VPN (ProtonVPN · WireGuard)
+Comment=Torrent tunnel with kill switch and port forwarding, plus a full web tunnel
+Type=Application
+Exec=cosmic-applet-vpn
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Applet;VPN;WireGuard;Proton;qBittorrent;Torrent;Kill switch;
+Icon=vpn-reticle-both-symbolic
+StartupNotify=true
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

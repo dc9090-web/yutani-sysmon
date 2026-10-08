@@ -42,12 +42,34 @@ Ideas and known limits kept out of v1 (the handoffs say: don't add features that
 - **Weather hourly canvas** fills the width it's given (296 px in the design) rather than a fixed 296, so its last label never spills past the well.
 - **Weather demo** shifts the fixtures by whole days, so local times stay as written (sunrise 06:12) while the day names follow today.
 
+- **VPN layout:** the handoff's three crates live here as `crates/vpn` (applet), `crates/vpn-helper` (root helper) and `crates/vpn-common` (parser, NAT-PMP codec, status types, qBittorrent conf editor).
+- **VPN qBittorrent.conf edit** happens in the applet (as the user) before it asks the helper to launch qBittorrent, the alternative the handoff's system README offers. The helper needs no `/home` access, no `setuid`, and a smaller capability set (`CAP_NET_ADMIN CAP_SYS_ADMIN CAP_DAC_READ_SEARCH`).
+- **VPN helper path:** `/usr/lib/cosmic-vpn-helper/cosmic-vpn-helper`, since CachyOS (Arch) has no `/usr/libexec`. Its unit creates `/run/netns` and `/etc/netns` before the sandbox starts, and uses `MountFlags=shared` so the namespace's bind mount reaches the host (systemd's `NetworkNamespacePath` and `ip netns` need to see it).
+- **VPN namespace creation** is done on a dedicated thread (`unshare` + bind mount), like `ip netns add`, not rtnetlink's fork-based helper. Everything that runs inside the namespace (WireGuard reads, NAT-PMP, the Web UI) runs on a fresh thread that enters it and exits, so no shared tokio thread ever changes namespace.
+- **VPN Flatpak DNS:** qBittorrent here is the Flatpak, which reads a copy of the host's `resolv.conf` kept by flatpak-session-helper. The qBittorrent unit bind-mounts the tunnel's `resolv.conf` over that copy too.
+- **VPN quit:** stopping qBittorrent always goes through its systemd unit (SIGTERM, which qBittorrent handles as a clean shutdown; SIGKILL after 10 s), since `QuitQbit()` carries no Web UI credentials.
+- **VPN port push** is driven by the applet (it holds the Web UI password); the helper only signals `PortChanged` and keeps no credentials.
+- **VPN Neon icons** (DC's call, 2026-10-08) use the theme's `accent_blue` / `accent_pink` rather than the icon lab's fixed hex, keeping colours from `theme.cosmic()`. The glow is a stack of faint discs on a canvas.
+- **VPN reticles** are embedded in the binary as well as installed, so the panel shows them before an install; the installed copies are for the applet list.
+- **VPN confirm dialog** ("qBittorrent is still running. Quit it and turn off?") is shown inline in the torrent card rather than as a separate window.
+- **VPN accessibility:** like the siblings, no AT-SPI; the panel tooltip carries the summary and every state has a word.
+
+- **VPN helper without mount sandboxing:** `ProtectSystem` / `PrivateTmp` / `ProtectHome` gave the helper a private mount namespace, which failed to start on CachyOS (`226/NAMESPACE`) and would hide the namespace's bind mount from systemd and `ip netns` anyway. The unit keeps the limits that need no mount namespace.
+- **VPN qBittorrent environment:** panel applets run on the panel's own Wayland connection, without the session's `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR` or session bus. The applet takes those from the user's systemd manager (`systemctl --user show-environment`) for qBittorrent.
+- **VPN qBittorrent tracking:** `flatpak run` exits once the app is up and moves it into a scope of the user's systemd, so the launcher unit runs with `KillMode=process` and the helper tracks qBittorrent by process (a `qbittorrent` whose network namespace is `vpn-p2p`), stopping it with SIGTERM then SIGKILL. That needs `CAP_SYS_PTRACE` (to read the user's `/proc/<pid>/ns/net`) and `CAP_KILL`.
+- **VPN stale qBittorrent lock:** qBittorrent's single-instance `lockfile` records the holder's PID, and under Flatpak every instance is PID 2 in its sandbox, so a lock left by an unclean exit makes every new instance think it's already running and quit (exit 0, "termination initiated"). Before launching, and only when no qBittorrent runs at all, the applet removes the stale `lockfile` and `ipc-socket`.
+- **VPN live checks (2026-10-08, CachyOS, Flatpak qBittorrent 5.2.4, Proton SE#440 + US-CA#602):** the torrent exit IP (v4 and v6) differs from the host's; the namespace holds only `lo` and `wg-p2p`; blackholing the endpoint stops all traffic and it recovers; `/etc/cosmic-vpn/p2p.conf` is 0600 root; DNS inside qBittorrent's sandbox is Proton's only; torrent packets bypass the web tunnel via the physical NIC; the web tunnel exits through Proton on v4 and v6 with all DNS on its link; a BitTorrent handshake from outside on the forwarded port is answered by qBittorrent; the leak banner and Restart in VPN work; the helper adopts a running tunnel after a restart; no key, password or SID in config, cache or logs.
+
+- **VPN Web UI session cookie:** qBittorrent 5 names it `QBT_SID_<port>` and marks it `Secure`, which an HTTP cookie store won't send over `http://127.0.0.1`. The helper carries the cookie by hand.
+- **VPN Web UI bypass first:** the helper asks for the preferences without logging in first; with "Bypass authentication for clients on localhost" that succeeds and no login is tried, so a stale saved password can't count toward qBittorrent's failed-login ban. An empty username in the applet also means "use the bypass".
+
 ## Ideas
 
 - Bits/s option for Network Traffic (open decision in the handoff).
 - Ship the RAPL udev rule in distro packages, or keep it a README step (open decision).
 - Final App IDs and crate names (placeholders today).
 - Weather: confirm the One Call 4.0 fixtures against live calls once a key with the subscription is available (`just live-check`).
+- VPN: not yet checked live: restore at login (needs a logout), suspend/resume, replacing a config, toggling the web tunnel from COSMIC Settings, panel sizes S–XL and vertical, the light theme, 125 % text scale.
 - Weather: ACCEPTANCE D-09 expects 5 distinct regions for "Melbourne"; the live API returns two "Victoria, AU" results with different coordinates.
 - AI Usage: localise weekday/month names in clock-time resets.
 - AI Usage: `just install` copies a bare `Exec=`, which the session panel can't find under `PREFIX=~/.local` (the README has the sed fix).

@@ -7,7 +7,7 @@
 
 <br>
 
-**Four tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; your Claude usage limits; and the weather for your cities.**
+**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
 
 The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. Each applet costs about 0.1 % of one core.
 
@@ -35,6 +35,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
 | 🖥️ | **System Monitor** | CPU, AMD GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
 | 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Reuses Claude Code's login, read-only. |
+| 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
 
 They are separate applets, each with its own panel slot, settings and process. Add any combination.
@@ -55,7 +56,7 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 🌐 | **One host, no telemetry** | AI Usage talks only to `api.anthropic.com` over rustls, caches nothing on disk, and holds the token only for the length of a request. |
 | 🗝️ | **Key in the keyring** | Weather keeps your OpenWeather key in the Secret Service keyring (a 0600 file only if there's none), never in config or logs, and talks only to `api.openweathermap.org`. |
 | 🔑 | **Hands off your login** | AI Usage opens Claude Code's credentials read-only and never refreshes the token, so it can't log Claude Code out. |
-| 🔒 | **No privileges, ever** | Nothing calls `sudo` or `pkexec` or writes to sysfs. Root-only counters show `—`. |
+| 🔒 | **No privileges, except one helper** | The applets never call `sudo` or `pkexec` or write to sysfs; root-only counters show `—`. The one exception is VPN's torrent tunnel: a small D-Bus-activated root helper, sandboxed by systemd and guarded by polkit, that only builds the namespace and starts qBittorrent in it. |
 
 Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the system applets; 6 min, startup included, for AI Usage):
 
@@ -201,6 +202,43 @@ The condition icon and the temperature for your panel city, in a fixed 4-charact
 
 ---
 
+## 🛡️ VPN (ProtonVPN · WireGuard)
+
+<div align="center">
+<img src="docs/screenshots/vpn-popup.png" alt="VPN popup with both tunnels on: Torrents · qBittorrent connected with forwarded port 53186, qBittorrent running in the VPN and its listening port set; All web traffic connected through NetworkManager" width="352">
+&nbsp;&nbsp;
+<img src="docs/screenshots/vpn-leak.png" alt="VPN popup warning that qBittorrent is running outside the VPN, with a Restart in VPN button" width="352">
+</div>
+
+<div align="center">
+<img src="docs/screenshots/vpn-panel.png" alt="The panel button: the reticle icon with P2P ON, WEB ON and PORT 53186, in the Mono and Neon icon styles" width="230">
+</div>
+
+*Screenshots use the demo data (`just vpn-demo`).*
+
+Two independent switches, each backed by its own Proton WireGuard `.conf`:
+
+- 🧲 **Torrents · qBittorrent:** a root helper builds a network namespace whose only interfaces are `lo` and the WireGuard tunnel, and starts qBittorrent inside it. That's the kill switch: if the tunnel drops, torrents stop, and nothing in the namespace can fall back to your real connection. Proton's NAT-PMP port forwarding is renewed every 45 s and set as qBittorrent's listening port (in its config before launch, then live through its Web UI). DNS inside goes only to Proton's resolver.
+- 🌐 **All web traffic:** a NetworkManager WireGuard connection, imported once, with IPv6 routed into the tunnel so it can't leak around it. NetworkManager stays the source of truth, so toggling it in COSMIC Settings works too.
+- 🔀 **Both at once:** the torrent tunnel's encrypted packets carry a firewall mark that routes them past the web tunnel, so torrents keep their own exit and port.
+- 🚨 **Leak detection:** a qBittorrent started any other way is spotted within 10 s (red dot and a banner); **Restart in VPN** moves it inside. Only qBittorrent started from the applet is protected, and other torrent clients aren't detected.
+- 🎯 **Panel:** the reticle (first chevron = torrents, second = web), `P2P` / `WEB` / `PORT` chunks that never change width, and an amber or red dot when something needs attention. **Mono** or **Neon** icon style.
+- 🔐 **Secrets:** private keys are parsed only to validate them, then go to the root helper (stored 0600 in `/etc/cosmic-vpn/`) or to NetworkManager. They are never logged, shown or kept in config. The qBittorrent Web UI password lives in the keyring.
+
+**Setup:** download two configs from account.protonvpn.com → Downloads → WireGuard (one **P2P** server with **NAT-PMP on** and **Moderate NAT off** for torrents, any server for web). In qBittorrent, enable the Web UI on port 8080 and turn off its own UPnP/NAT-PMP. Then:
+
+```sh
+just vpn-check-conf ~/Downloads/*.conf   # what the parser sees; the key is never printed
+just vpn-helper-install                  # the root helper, D-Bus, systemd and polkit files (sudo)
+```
+
+and import both configs from the applet's settings. Importing the torrent config asks for your admin password once; switching tunnels doesn't. `just vpn-helper-uninstall` removes the helper and any tunnel left up.
+
+- 📦 **Native or Flatpak qBittorrent** both work; the applet finds `qbittorrent` on `PATH`, else `org.qbittorrent.qBittorrent`, or uses the command you set.
+- ✅ **`sudo crates/vpn-helper/acceptance.sh`** checks a running torrent tunnel: its exit IPs against the host's, that the namespace has no way out but the tunnel, the conf file's permissions, and the kill switch (it blackholes the endpoint for 15 s, then restores it).
+
+---
+
 ## 📦 Install
 
 Needs Rust (edition 2024) and the usual COSMIC build dependencies (`libxkbcommon`, `wayland`, `pkg-config`).
@@ -212,7 +250,7 @@ just build
 sudo just install           # → /usr/local
 ```
 
-Then add **Network Traffic**, **System Monitor**, **AI Usage** and/or **Weather** in *Settings → Desktop → Panel → Applets*.
+Then add **Network Traffic**, **System Monitor**, **AI Usage**, **Weather** and/or **VPN** in *Settings → Desktop → Panel → Applets*.
 
 <details>
 <summary>Installing without root</summary>
@@ -224,7 +262,7 @@ PREFIX=~/.local just install
 cosmic-panel launches applets with the session `PATH`, which usually lacks `~/.local/bin`. Point the desktop entries at the binaries:
 
 ```sh
-sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon,AiUsage,Weather}.desktop
+sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon,AiUsage,Weather,Vpn}.desktop
 ```
 </details>
 
@@ -239,6 +277,9 @@ sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.
 | `just demo` | AI Usage's popup cycling through every state, without a login or network |
 | `just weather-demo` | the same for Weather, without a key or network |
 | `just live-check` | Weather: one real call per OpenWeather endpoint, compared with the fixtures |
+| `just vpn-demo` | VPN's popup cycling through every state, with a fake helper and NetworkManager |
+| `just vpn-check-conf <files>` | VPN: what the parser makes of your Proton configs, key never shown |
+| `just vpn-helper-install` / `vpn-helper-uninstall` | VPN's root helper and its system files (sudo) |
 
 ---
 
@@ -251,6 +292,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | Network Traffic | `~/.config/cosmic/io.github.dc.CosmicAppletNetTraffic/v1/` | `mode`, `indicator`, `adapter` |
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
 | AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_session`, `show_weekly`, `show_fable`, `show_session_reset`, `style`, `amount`, `reset_format`, `refresh_minutes` |
+| VPN | `~/.config/cosmic/io.github.dc.CosmicAppletVpn/v1/` | `p2p_conf`, `web_conf`, `web_nm_uuid`, `launch_qbit`, `quit_qbit`, `auto_port`, `webui_port`, `webui_user`, `show_port`, `restore`, `last_p2p`, `last_web`, `qbit_command`, `icon_style` (no keys or passwords) |
 | Weather | `~/.config/cosmic/io.github.dc.CosmicAppletWeather/v1/` | `locations`, `panel_location`, `units`, `icon_set`, `show_city`, `show_hilo`, `refresh_minutes` (the API key is in the keyring, never here) |
 
 ---
@@ -264,11 +306,14 @@ crates/
   sysmon/        the System Monitor applet   (cosmic-applet-sysmon)
   ai-usage/      the AI Usage applet         (cosmic-applet-ai-usage)
   weather/       the Weather applet          (cosmic-applet-weather)
+  vpn/           the VPN applet              (cosmic-applet-vpn)
+  vpn-helper/    its root helper             (cosmic-vpn-helper) and system files
+  vpn-common/    shared: Proton conf parser, NAT-PMP codec, status types
 handoff/         the original design and spec packages (SPEC, DESIGN, ACCEPTANCE, prototype, screenshots)
 docs/            README images
 ```
 
-The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSysMon`, `io.github.dc.CosmicAppletAiUsage` and `io.github.dc.CosmicAppletWeather` are placeholders and should be changed before publishing to a distro.
+The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSysMon`, `io.github.dc.CosmicAppletAiUsage`, `io.github.dc.CosmicAppletWeather`, `io.github.dc.CosmicAppletVpn` and `io.github.dc.CosmicVpnHelper` are placeholders and should be changed before publishing to a distro.
 
 ---
 

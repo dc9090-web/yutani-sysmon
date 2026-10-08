@@ -1,0 +1,33 @@
+[package]
+name = "cosmic-applet-vpn"
+description = "COSMIC panel applet: a qBittorrent-only WireGuard tunnel with kill switch and port forwarding, plus a full web tunnel (ProtonVPN)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# oo7 0.6 needs 1.92.
+rust-version = "1.92"
+
+[features]
+# `VPN_DEMO=1` cycles through every state with a fake helper and NetworkManager.
+demo = []
+
+[dependencies]
+common.workspace = true
+libcosmic.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+vpn-common = { path = "../vpn-common", package = "yutani-vpn-common" }
+ashpd = { version = "0.11", default-features = false, features = ["tokio"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+nix = { version = "0.30", default-features = false, features = ["signal", "user"] }
+oo7 = { version = "0.6", default-features = false, features = ["tokio", "native_crypto"] }
+tokio = { version = "1", features = ["time", "macros", "fs", "process"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+zeroize = "1"
+
+[dev-dependencies]
+serde_json = "1"

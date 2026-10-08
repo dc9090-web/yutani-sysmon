@@ -1,0 +1,27 @@
+# /usr/lib/systemd/system/
+[Unit]
+Description=COSMIC VPN applet helper (WireGuard netns, NAT-PMP, qBittorrent launcher)
+After=network.target
+
+[Service]
+Type=dbus
+BusName=io.github.dc.CosmicVpnHelper
+ExecStart=/usr/libexec/cosmic-vpn-helper
+# The namespace and kill switch survive helper exit by design; the helper adopts them on restart.
+KillMode=process
+Restart=on-failure
+ProtectSystem=strict
+ReadWritePaths=/etc/cosmic-vpn /etc/netns /run/netns /home
+ProtectHome=false
+PrivateTmp=true
+NoNewPrivileges=false
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+ConfigurationDirectory=cosmic-vpn
+ConfigurationDirectoryMode=0700
+
+[Install]
+# D-Bus activated; no WantedBy needed.

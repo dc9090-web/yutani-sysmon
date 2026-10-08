@@ -1,0 +1,9 @@
+{
+  "listen_port": 53186,
+  "upnp": false,
+  "random_port": false,
+  "web_ui_port": 8080,
+  "bypass_local_auth": true,
+  "current_network_interface": "",
+  "save_path": "/home/dc/Downloads"
+}

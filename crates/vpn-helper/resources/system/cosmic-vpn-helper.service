@@ -1,0 +1,31 @@
+# /usr/lib/systemd/system/
+[Unit]
+Description=COSMIC VPN applet helper (WireGuard netns, NAT-PMP, qBittorrent launcher)
+After=network.target
+
+[Service]
+Type=dbus
+BusName=io.github.dc.CosmicVpnHelper
+ExecStart=/usr/lib/cosmic-vpn-helper/cosmic-vpn-helper
+# The namespace and kill switch survive helper exit by design; the helper adopts them on restart.
+KillMode=process
+Restart=on-failure
+# No private mount namespace (ProtectSystem, PrivateTmp, ProtectHome …): the
+# torrent namespace is pinned by a bind mount under /run/netns, which systemd
+# (NetworkNamespacePath) and `ip netns` must see on the host, exactly as
+# `ip netns add` does it. The limits below need no mount namespace.
+NoNewPrivileges=true
+# setns/unshare/mount need CAP_SYS_ADMIN; reading the user's runtime dir for
+# the Flatpak DNS path needs CAP_DAC_READ_SEARCH. Finding qBittorrent by its
+# namespace (/proc/<pid>/ns/net of the user's processes) needs CAP_SYS_PTRACE,
+# and asking it to quit needs CAP_KILL.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_DAC_READ_SEARCH CAP_SYS_PTRACE CAP_KILL
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+ConfigurationDirectory=cosmic-vpn
+ConfigurationDirectoryMode=0700
+
+[Install]
+# D-Bus activated; no WantedBy needed.

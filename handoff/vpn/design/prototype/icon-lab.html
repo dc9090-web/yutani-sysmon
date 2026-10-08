@@ -1,0 +1,168 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>VPN icon lab</title>
+<style>
+  html, body { background: var(--bg); color: var(--on-bg); margin: 0; }
+  .lab { display: grid; grid-template-columns: 300px 1fr; gap: 20px; padding: 16px; font: 400 13px/18px var(--font-sans); }
+  .panelc { background: var(--bg-component); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; align-self: start; }
+  .sec { font: 600 11px/16px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--on-bg-muted); margin-top: 4px; }
+  .ctl { display: grid; grid-template-columns: 84px 1fr 34px; align-items: center; gap: 8px; }
+  .ctl label { color: var(--on-bg-muted); font-size: 12px; } .ctl output { font: 400 12px/17px var(--font-mono); text-align: right; }
+  .ctl input[type=range] { width: 100%; accent-color: var(--accent); }
+  .ctl .ca-seg { grid-column: 2 / 4; } .ctl .ca-seg { grid-auto-columns: minmax(0, 1fr); } .ctl .ca-seg button { font-size: 12px; padding: 2px 2px; white-space: nowrap; overflow: hidden; }
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tabs button { border: 1px solid transparent; background: var(--bg); color: var(--on-bg); border-radius: 10px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 12px/16px var(--font-sans); cursor: default; }
+  .tabs button[aria-pressed="true"] { border-color: var(--accent); }
+  .tabs svg { width: 28px; height: 28px; }
+  .stage { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; } .hero > * { min-width: 0; }
+  .bg { border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .bg.dark { background: #1b1b1b; color: #f2f2f2; --mut: #9a9a9a; } .bg.light { background: #e8e8e8; color: #1b1b1b; --mut: #666; }
+  .bg.neonbg { background: #07090d; color: #19e6ff; --mut: #6f7a8a; }
+  .tag { font: 400 11px/16px var(--font-sans); color: var(--mut); }
+  .sizes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+  .sizes figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; } .sizes figcaption { font: 400 10px/12px var(--font-mono); color: var(--mut); }
+  .strip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: rgba(128,128,128,.14); align-self: flex-start; }
+  .chunk { display: grid; grid-template-rows: 12px 17px; } .chunk .l { font: 600 10px/12px var(--font-mono); color: var(--mut); } .chunk .v { font: 600 12px/17px var(--font-mono); }
+  .chunk .v.on { color: var(--ok, #5ad48a); } .chunk .v.off { color: var(--mut); font-weight: 400; }
+  .bg.light .chunk .v.on { color: #11743e; }
+  .states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .states .cell { border-radius: 10px; padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: var(--bg-component); }
+  .states .cell svg { width: 32px; height: 32px; } .states .cell span { font-size: 11px; color: var(--on-bg-muted); }
+  .presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .presets button { border: 1px solid transparent; background: var(--bg-component); color: var(--on-bg); border-radius: 10px; padding: 10px 4px 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; font: 400 11px/14px var(--font-sans); cursor: default; }
+  .presets button:hover { border-color: var(--accent); } .presets svg { width: 32px; height: 32px; }
+  .h { font: 600 14px/20px var(--font-sans); }
+  .glow svg { filter: drop-shadow(0 0 var(--g1, 2px) currentColor) drop-shadow(0 0 var(--g2, 6px) currentColor); }
+  .code { font: 400 11px/16px var(--font-mono); background: var(--bg-component); border-radius: 10px; padding: 10px; white-space: pre-wrap; word-break: break-all; color: var(--on-bg-muted); max-height: 90px; overflow: auto; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="tunnels.html">Tunnel cards</a><a href="settings.html">Settings</a><a href="states.html">States</a><a href="icon.html">Icon</a><a href="icon-lab.html" aria-current="page">Icon lab</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="lab">
+  <div class="panelc" id="ctl"></div>
+  <div class="stage">
+    <div class="hero" id="hero"></div>
+    <div><div class="h" style="margin-bottom:8px">States</div><div class="states" id="states"></div></div>
+    <div><div class="h" style="margin-bottom:8px">Presets <span class="tag" style="font-weight:400">· click to load</span></div><div class="presets" id="presets"></div></div>
+    <div><div class="h" style="margin-bottom:8px">SVG (current state, mono)</div><div class="code" id="code"></div></div>
+  </div>
+</div>
+<script>
+  var NEON = { cyan: '#19e6ff', magenta: '#ff2bd6', lime: '#b6ff3b', amber: '#ffb020' };
+  var DEF = {
+    B: { sw: 1.3, chev: 2, arm: 3.5, close: 1, chevStyle: 'solid', ticks: 0, rot: 0 },
+    C: { sw: 1.1, segs: 4, gap: 40, lit: 2.6, core: 'diamond', ticks: 1, rot: 0 },
+    D: { sw: 1.3, slices: 1, off: 1.6, sgap: 0.9, shape: 'round', debris: 1, scan: 0 }
+  };
+  var S = { k: 'B', state: 'both', style: 'mono', hue: 'cyan', glow: 5, p: { B: Object.assign({}, DEF.B), C: Object.assign({}, DEF.C), D: Object.assign({}, DEF.D) } };
+  var uid = 0, f2 = function (n) { return (+n).toFixed(2).replace(/\.?0+$/, ''); };
+  var on = function (st, which) { return st === 'both' || st === which; };
+  var SW = function (w) { return 'fill="none" stroke="currentColor" stroke-width="' + w + '" stroke-linejoin="miter" stroke-linecap="square"'; };
+
+  /* ---- B · Reticle tunnel ---- */
+  function drawB(p, st) {
+    var a = p.arm, c = (st === 'both' ? p.close : 0), i0 = 1 + c, i1 = 15 - c, o = '';
+    var br = 'M' + i0 + ' ' + (i0 + a) + 'V' + i0 + 'H' + (i0 + a) + 'M' + (i1 - a) + ' ' + i0 + 'H' + i1 + 'V' + (i0 + a) + 'M' + i1 + ' ' + (i1 - a) + 'V' + i1 + 'H' + (i1 - a) + 'M' + (i0 + a) + ' ' + i1 + 'H' + i0 + 'V' + (i1 - a);
+    o += '<path d="' + br + '" ' + SW(p.sw) + '/>';
+    if (p.ticks) o += '<path d="M8 0.6V2M8 14V15.4M0.6 8H2M14 8H15.4" ' + SW(p.sw * 0.8) + '/>';
+    var n = p.chev, w = 3.4, step = n === 1 ? 0 : n === 2 ? 3.6 : 2.9, span = step * (n - 1) + w + 2.2, x0 = 8 - span / 2, h = n === 3 ? 3.2 : 3.6;
+    for (var i = 0; i < n; i++) {
+      var lit = n === 1 ? st !== 'off' : (i === 0 ? on(st, 'p2p') : i === n - 1 ? on(st, 'web') : st === 'both');
+      var x = x0 + i * step, d = 'M' + f2(x) + ' ' + f2(8 - h) + 'L' + f2(x + w) + ' 8L' + f2(x) + ' ' + f2(8 + h) + 'H' + f2(x + 2.2) + 'L' + f2(x + w + 2.2) + ' 8L' + f2(x + 2.2) + ' ' + f2(8 - h) + 'Z';
+      if (p.chevStyle === 'line') o += '<path d="M' + f2(x + 0.6) + ' ' + f2(8 - h + 0.6) + 'L' + f2(x + w + 0.6) + ' 8L' + f2(x + 0.6) + ' ' + f2(8 + h - 0.6) + '" ' + SW(lit ? p.sw * 1.5 : p.sw * 0.75) + '/>';
+      else o += lit ? '<path d="' + d + '" fill="currentColor"/>' : '<path d="M' + f2(x + 1.1) + ' ' + f2(8 - h + 0.7) + 'L' + f2(x + w + 0.4) + ' 8L' + f2(x + 1.1) + ' ' + f2(8 + h - 0.7) + '" fill="none" stroke="currentColor" stroke-width="' + f2(p.sw * 0.75) + '" stroke-linejoin="miter" stroke-linecap="butt"/>';
+    }
+    return p.rot ? '<g transform="rotate(' + p.rot + ' 8 8)">' + o + '</g>' : o;
+  }
+  /* ---- C · Segmented ring ---- */
+  function drawC(p, st) {
+    var n = p.segs, seg = 360 / n, o = '';
+    function pt(a, r) { var t = (a - 90) * Math.PI / 180; return f2(8 + r * Math.cos(t)) + ' ' + f2(8 + r * Math.sin(t)); }
+    for (var i = 0; i < n; i++) {
+      var mid = i * seg + seg / 2 + p.rot, a0 = mid - (seg - p.gap * seg / 90) / 2, a1 = mid + (seg - p.gap * seg / 90) / 2;
+      var ang = ((mid % 360) + 360) % 360, isLeft = ang > 180 || ang === 0, lit = isLeft ? on(st, 'p2p') : on(st, 'web');
+      var r = lit ? 6.6 - p.lit / 2 : 6.6 - p.sw / 2;
+      o += '<path d="M' + pt(a0, r) + 'A' + r + ' ' + r + ' 0 0 1 ' + pt(a1, r) + '" fill="none" stroke="currentColor" stroke-width="' + (lit ? p.lit : p.sw) + '"/>';
+    }
+    if (p.ticks) o += '<path d="M8 0.4V1.4M8 14.6V15.6M0.4 8H1.4M14.6 8H15.6" ' + SW(1) + '/>';
+    var full = st === 'both', cs = full ? 3 : 2.3;
+    if (p.core === 'diamond') o += '<path d="M8 ' + f2(8 - cs) + 'L' + f2(8 + cs) + ' 8L8 ' + f2(8 + cs) + 'L' + f2(8 - cs) + ' 8Z" ' + (full ? 'fill="currentColor"' : SW(1)) + '/>';
+    else if (p.core === 'dot') o += '<circle cx="8" cy="8" r="' + (full ? 2.2 : 1.7) + '" ' + (full ? 'fill="currentColor"' : SW(1)) + '/>';
+    else if (p.core === 'square') o += '<rect x="' + f2(8 - cs * 0.75) + '" y="' + f2(8 - cs * 0.75) + '" width="' + f2(cs * 1.5) + '" height="' + f2(cs * 1.5) + '" ' + (full ? 'fill="currentColor"' : SW(1)) + '/>';
+    else if (p.core === 'cross') o += '<path d="M8 ' + f2(8 - cs) + 'V' + f2(8 + cs) + 'M' + f2(8 - cs) + ' 8H' + f2(8 + cs) + '" ' + SW(full ? 1.6 : 1) + '/>';
+    return o;
+  }
+  /* ---- D · Glitch shield ---- */
+  function drawD(p, st) {
+    var id = 'g' + (uid++), sh = p.shape === 'round' ? 'M8 1.2L14 3.3V7.6C14 11.2 11.5 13.8 8 14.9C4.5 13.8 2 11.2 2 7.6V3.3Z' : 'M4.5 1.25H11.5L14.5 4.25V8.75L8 15L1.5 8.75V4.25Z';
+    var fillClip = st === 'p2p' ? '<rect width="8" height="16"/>' : st === 'web' ? '<rect x="8" width="8" height="16"/>' : '';
+    var body = st === 'off' ? '<path d="' + sh + '" ' + SW(p.sw) + '/>' : st === 'both' ? '<path d="' + sh + '" fill="currentColor" stroke="currentColor" stroke-width="' + p.sw + '" stroke-linejoin="miter"/>'
+      : '<path d="' + sh + '" ' + SW(p.sw) + '/><path d="' + sh + '" fill="currentColor" clip-path="url(#' + id + 'h)"/>';
+    var cuts = p.slices === 1 ? [[6.6, 9.4]] : [[4.8, 6.8], [9.2, 11.2]], g = p.sgap / 2, bands = [], y = -1;
+    cuts.forEach(function (c) { bands.push([y, c[0] - g, 0]); bands.push([c[0] + g, c[1] - g, 1]); y = c[1] + g; });
+    bands.push([y, 18, 0]);
+    var defs = '<clipPath id="' + id + 'h">' + fillClip + '</clipPath>', o = '';
+    bands.forEach(function (b, i) { defs += '<clipPath id="' + id + 'b' + i + '"><rect x="-3" y="' + f2(b[0]) + '" width="22" height="' + f2(b[1] - b[0]) + '"/></clipPath>';
+      var dx = b[2] ? (i % 4 === 1 ? p.off : -p.off * 0.7) : 0; o += '<g clip-path="url(#' + id + 'b' + i + ')"><g transform="translate(' + f2(dx) + ' 0)">' + body + '</g></g>'; });
+    if (p.debris && st !== 'off') o += '<rect x="0" y="' + f2(cuts[0][0] + 0.3) + '" width="1.1" height="1.1" fill="currentColor"/><rect x="14.6" y="' + f2(cuts[cuts.length - 1][1] - 1.3) + '" width="0.9" height="0.9" fill="currentColor"/>';
+    if (p.scan && st === 'both') { var m = ''; for (var yy = 3; yy < 14; yy += 2) m += '<rect x="0" y="' + yy + '" width="16" height="0.5"/>'; o = '<defs><mask id="' + id + 'm"><rect width="16" height="16" fill="#fff"/><g fill="#000">' + m + '</g></mask></defs><g mask="url(#' + id + 'm)">' + o + '</g>'; }
+    return '<defs>' + defs + '</defs>' + o;
+  }
+  var DRAW = { B: drawB, C: drawC, D: drawD }, NAME = { B: 'Reticle tunnel', C: 'Segmented ring', D: 'Glitch shield' };
+  function svg(k, p, st, px) { return '<svg viewBox="0 0 16 16" width="' + px + '" height="' + px + '" overflow="visible">' + DRAW[k](p, st) + '</svg>'; }
+
+  var PRESETS = {
+    B: [['Default', {}], ['Single »', { chev: 1, arm: 4 }], ['Triple', { chev: 3, arm: 3 }], ['Line chevrons', { chevStyle: 'line', sw: 1.2 }], ['Long arms + ticks', { arm: 5, ticks: 1, close: 0.5 }], ['Rotated 90°', { rot: 90 }]],
+    C: [['Default', {}], ['Six segments', { segs: 6, gap: 30 }], ['Eight, thin', { segs: 8, gap: 35, lit: 2, sw: 0.9 }], ['Dot core', { core: 'dot', ticks: 0 }], ['Square core, 45°', { core: 'square', rot: 45 }], ['Cross, no core ring', { core: 'cross', segs: 3, gap: 28 }]],
+    D: [['Default', {}], ['Two slices', { slices: 2, off: 1.4 }], ['Big shift', { off: 2.4, sgap: 1.1 }], ['Chamfer body', { shape: 'chamfer' }], ['Scanlines', { scan: 1 }], ['Clean (no debris)', { debris: 0, off: 1.2, sgap: 0.7 }]]
+  };
+  var CTLS = {
+    B: [['sw', 'Stroke', 0.9, 1.8, 0.1], ['chev', 'Chevrons', 1, 3, 1], ['arm', 'Bracket arm', 2, 6, 0.5], ['close', 'Close-in', 0, 2, 0.25], ['chevStyle', 'Chevron', ['solid', 'line']], ['ticks', 'Edge ticks', [0, 1]], ['rot', 'Rotate', [0, 90, -90]]],
+    C: [['sw', 'Stroke', 0.7, 1.6, 0.1], ['segs', 'Segments', 3, 8, 1], ['gap', 'Gap', 10, 60, 2], ['lit', 'Lit weight', 1.6, 3.4, 0.1], ['core', 'Core', ['diamond', 'dot', 'square', 'cross', 'none']], ['ticks', 'Edge ticks', [0, 1]], ['rot', 'Rotate', 0, 90, 5]],
+    D: [['sw', 'Stroke', 0.9, 1.8, 0.1], ['slices', 'Slices', [1, 2]], ['off', 'Offset', 0, 3, 0.1], ['sgap', 'Slice gap', 0.4, 1.6, 0.1], ['shape', 'Body', ['round', 'chamfer']], ['debris', 'Pixel debris', [0, 1]], ['scan', 'Scanlines', [0, 1]]]
+  };
+  var LBL = { 0: 'Off', 1: 'On', diamond: '◆', dot: '●', square: '■', cross: '+', none: '∅', magenta: 'pink', '90': '90°', '-90': '−90°' };
+  var $ = function (id) { return document.getElementById(id); };
+  function seg(key, vals, cur, lbl) { return '<div class="ctl"><label>' + lbl + '</label><div class="ca-seg" data-seg="' + key + '">' + vals.map(function (v) { return '<button data-v="' + v + '" aria-pressed="' + (String(v) === String(cur)) + '">' + (LBL[v] !== undefined && !(key === 'p.slices') ? LBL[v] : v) + '</button>'; }).join('') + '</div></div>'; }
+  function paintCtl() {
+    var p = S.p[S.k], h = '<div class="sec">Concept</div><div class="tabs">' + ['B', 'C', 'D'].map(function (k) { return '<button data-k="' + k + '" aria-pressed="' + (k === S.k) + '">' + svg(k, S.p[k], 'both', 28) + k + ' · ' + NAME[k] + '</button>'; }).join('') + '</div>';
+    h += '<div class="sec">Shape</div>' + CTLS[S.k].map(function (c) { var v = p[c[0]];
+      if (Array.isArray(c[2])) return seg('p.' + c[0], c[2], v, c[1]);
+      return '<div class="ctl"><label>' + c[1] + '</label><input type="range" min="' + c[2] + '" max="' + c[3] + '" step="' + c[4] + '" value="' + v + '" data-r="' + c[0] + '"><output>' + v + '</output></div>'; }).join('');
+    h += '<button class="ca-btn sm" id="reset" style="align-self:flex-start">Reset ' + S.k + '</button>';
+    h += '<div class="sec">Preview</div>' + seg('state', ['off', 'p2p', 'web', 'both'], S.state, 'State') + seg('style', ['mono', 'neon'], S.style, 'Style');
+    if (S.style === 'neon') h += seg('hue', Object.keys(NEON), S.hue, 'Neon hue') + '<div class="ctl"><label>Glow</label><input type="range" min="0" max="10" step="1" value="' + S.glow + '" data-g="1"><output>' + S.glow + '</output></div>';
+    $('ctl').innerHTML = h;
+  }
+  function stripHTML(k, p, st, px) { var c = function (l, o) { return '<span class="chunk"><span class="l">' + l + '</span><span class="v ' + (o ? 'on' : 'off') + '">' + (o ? 'ON' : 'OFF') + '</span></span>'; };
+    return '<div class="strip"><span style="display:inline-flex">' + svg(k, p, st, px) + '</span>' + c('P2P', on(st, 'p2p')) + c('WEB', on(st, 'web')) + '</div>'; }
+  function paintStage() {
+    var k = S.k, p = S.p[k], st = S.state, neon = S.style === 'neon', col = NEON[S.hue];
+    var sizes = function () { return '<div class="sizes">' + [16, 24, 32, 48, 72].map(function (px) { return '<figure>' + svg(k, p, st, px) + '<figcaption>' + px + '</figcaption></figure>'; }).join('') + '</div>'; };
+    var glowCss = 'style="--g1:' + (S.glow * 0.35) + 'px;--g2:' + S.glow + 'px;color:' + (st === 'off' ? '#6f7a8a' : col) + '"';
+    $('hero').innerHTML = neon
+      ? '<div class="bg neonbg glow" ' + glowCss + '><span class="tag">Neon · ' + S.hue + '</span>' + sizes() + '<div style="display:flex;gap:10px">' + stripHTML(k, p, st, 16) + stripHTML(k, p, st, 24) + '</div></div>' +
+        '<div class="bg neonbg glow" style="--g1:' + (S.glow * 0.35) + 'px;--g2:' + S.glow + 'px;color:' + NEON.magenta + '"><span class="tag">Issue state (leak / error) · magenta</span>' + sizes() + '<div style="display:flex;gap:10px">' + stripHTML(k, p, st, 16) + stripHTML(k, p, st, 24) + '</div></div>'
+      : '<div class="bg dark"><span class="tag">Dark panel</span>' + sizes() + '<div style="display:flex;gap:10px">' + stripHTML(k, p, st, 16) + stripHTML(k, p, st, 24) + '</div></div>' +
+        '<div class="bg light"><span class="tag">Light panel</span>' + sizes() + '<div style="display:flex;gap:10px">' + stripHTML(k, p, st, 16) + stripHTML(k, p, st, 24) + '</div></div>';
+    $('states').innerHTML = [['off', 'Off'], ['p2p', 'P2P only'], ['web', 'Web only'], ['both', 'Both'], ['both', '16 px · both']].map(function (s, i) {
+      return '<div class="cell' + (neon ? ' glow' : '') + '" style="' + (neon ? 'background:#07090d;color:' + (s[0] === 'off' ? '#6f7a8a' : col) + ';--g1:' + (S.glow * 0.3) + 'px;--g2:' + (S.glow * 0.8) + 'px' : '') + '">' + (i === 4 ? svg(k, p, s[0], 16) : svg(k, p, s[0], 32)) + '<span>' + s[1] + '</span></div>'; }).join('');
+    $('presets').innerHTML = PRESETS[k].map(function (pr, i) { var pp = Object.assign({}, DEF[k], pr[1]); return '<button data-pre="' + i + '">' + svg(k, pp, 'both', 32) + '<span>' + pr[0] + '</span></button>'; }).join('');
+    $('code').textContent = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">' + DRAW[k](p, st).replace(/currentColor/g, '#bebebe') + '</svg>';
+  }
+  function paint() { paintCtl(); paintStage(); }
+  $('ctl').addEventListener('input', function (e) { var t = e.target;
+    if (t.dataset.r) { S.p[S.k][t.dataset.r] = +t.value; t.nextElementSibling.textContent = t.value; paintStage(); var tb = document.querySelector('.tabs [data-k="' + S.k + '"]'); if (tb) tb.innerHTML = svg(S.k, S.p[S.k], 'both', 28) + S.k + ' · ' + NAME[S.k]; }
+    if (t.dataset.g) { S.glow = +t.value; t.nextElementSibling.textContent = t.value; paintStage(); } });
+  $('ctl').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.k) S.k = b.dataset.k;
+    else if (b.id === 'reset') S.p[S.k] = Object.assign({}, DEF[S.k]);
+    else { var sg = b.closest('[data-seg]'); if (!sg) return; var key = sg.dataset.seg, v = b.dataset.v; v = isNaN(+v) ? v : +v;
+      if (key.indexOf('p.') === 0) S.p[S.k][key.slice(2)] = v; else S[key] = v; }
+    paint(); });
+  $('presets').addEventListener('click', function (e) { var b = e.target.closest('[data-pre]'); if (!b) return; S.p[S.k] = Object.assign({}, DEF[S.k], PRESETS[S.k][+b.dataset.pre][1]); paint(); });
+  paint();
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

@@ -1,0 +1,19 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>VpnConfigs — settings</title></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="tunnels.html">Tunnel cards</a><a href="settings.html" aria-current="page">Settings</a><a href="states.html">States</a><a href="icon.html">Icon</a><a href="icon-lab.html">Icon lab</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="ca-stage" id="root"></div>
+<script>
+  var A = window.CosmicApplets, root = document.getElementById('root');
+  var sub = '<div class="ca-subhead"><button class="ca-iconbtn" aria-label="Back"><span class="ca-icon i-back"></span></button><span class="ca-heading">Applet settings</span></div><div class="ca-sep full" style="margin:4px 0 8px"></div>';
+  var base = function (f) { var s = { v: A.vpnDefaults(), launch: true, quit: true, autoPort: true, webui: 8080, user: 'admin', showPort: true, restore: true, webuiOk: true }; f(s); return s; };
+  var cases = [
+    ['Default · both configs imported', base(function () {})],
+    ['First run · nothing imported', base(function (s) { s.v.p2p.file = ''; s.v.web.file = ''; })],
+    ['Torrent conf without NAT-PMP · manual port', base(function (s) { s.v.p2p.natpmp = false; s.v.p2p.file = 'proton-nl-12.conf'; s.v.p2p.server = 'NL#12 · Amsterdam'; s.autoPort = false; })]
+  ];
+  cases.forEach(function (c) { var el = document.createElement('div'); el.className = 'col'; el.innerHTML = '<span class="ca-tag">' + c[0] + '</span><div class="ca-popup">' + sub + A.vpnSettingsHTML(c[1]) + '</div>'; root.appendChild(el); });
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

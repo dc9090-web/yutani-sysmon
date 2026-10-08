@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- /usr/share/polkit-1/actions/ -->
+<policyconfig>
+  <vendor>COSMIC VPN applet</vendor>
+  <action id="io.github.dc.cosmicvpn.control">
+    <description>Control the torrent VPN tunnel and qBittorrent</description>
+    <message>Authentication is required to control the torrent VPN tunnel</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+  <action id="io.github.dc.cosmicvpn.import">
+    <description>Install a WireGuard configuration for the torrent tunnel</description>
+    <message>Authentication is required to install a VPN configuration</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

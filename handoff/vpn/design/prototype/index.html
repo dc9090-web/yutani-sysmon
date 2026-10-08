@@ -1,0 +1,90 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>VPN — prototype</title>
+<style>
+  .proto { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px; }
+  .topbar { width:392px; display:flex; justify-content:flex-end; }
+  .ca-popup { position: relative; }
+  html, body { background: var(--bg); }
+  [hidden] { display:none !important; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html" aria-current="page">Prototype</a><a href="panel.html">Panel button</a><a href="tunnels.html">Tunnel cards</a><a href="settings.html">Settings</a><a href="states.html">States</a><a href="icon.html">Icon</a><a href="icon-lab.html">Icon lab</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="proto">
+  <div class="topbar"><div class="ca-panel h"><button class="ca-pbtn is-open" id="pbtn" aria-expanded="true"></button></div></div>
+  <div class="ca-popup" id="popup">
+    <section id="main">
+      <div id="head"></div>
+      <div id="leak"></div>
+      <div class="ca-sep full" style="margin:0 0 6px"></div>
+      <div id="p2p"></div>
+      <div class="ca-sep"></div>
+      <div id="web"></div>
+      <div class="ca-sep"></div>
+      <button class="ca-menu" id="toSettings"><span class="ca-icon i-settings"></span><span class="grow">Applet settings</span><span class="ca-icon i-next"></span></button>
+    </section>
+    <section id="settings" hidden>
+      <div class="ca-subhead"><button class="ca-iconbtn" id="back" aria-label="Back"><span class="ca-icon i-back"></span></button><span class="ca-heading">Applet settings</span></div>
+      <div class="ca-sep full" style="margin:4px 0 8px"></div>
+      <div id="sbody"></div>
+    </section>
+    <div class="ca-toast" id="toast" hidden></div>
+  </div>
+  <div class="ca-simbar">Simulate:
+    <button class="ca-btn" data-sim="outside">qBittorrent started outside VPN</button>
+    <button class="ca-btn" data-sim="stale">Handshake lost</button>
+    <button class="ca-btn" data-sim="nopf">Non-P2P server</button>
+    <button class="ca-btn" data-sim="webui">Web UI off</button>
+    <button class="ca-btn" data-sim="reset">Reset</button>
+  </div>
+</div>
+<script>
+  var A = window.CosmicApplets, $ = function (id) { return document.getElementById(id); };
+  var S, timers = [];
+  function reset() { timers.forEach(clearTimeout); timers = []; S = { v: A.vpnDefaults(), launch: true, quit: true, autoPort: true, webui: 8080, user: 'admin', restore: true, webuiOk: true, nopf: false, showPort: true }; S.v.showPort = true; }
+  reset();
+  function later(ms, f) { timers.push(setTimeout(function () { f(); paint(); }, ms)); }
+  function paint() {
+    var v = S.v; v.showPort = S.showPort !== false;
+    $('pbtn').innerHTML = A.vpnPanelHTML(v);
+    $('pbtn').title = 'VPN · torrents ' + v.p2p.state + (v.p2p.port.state === 'ok' && v.p2p.state === 'on' ? ' (port ' + v.p2p.port.port + ')' : '') + ' · web ' + v.web.state;
+    if (!$('main').hidden) { $('head').innerHTML = A.vpnHeadHTML(v); $('leak').innerHTML = A.leakHTML(v); $('p2p').innerHTML = A.tunnelCardHTML('p2p', v); $('web').innerHTML = A.tunnelCardHTML('web', v); }
+    else $('sbody').innerHTML = A.vpnSettingsHTML(S);
+  }
+  function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(el._t); el._t = setTimeout(function () { el.hidden = true; }, 1400); }
+  function launchQbit() { var p = S.v.p2p; p.qbit = 'starting'; later(1100, function () { if (p.state !== 'off') { p.qbit = 'vpn'; if (p.port.state === 'ok') p.port.applied = S.autoPort && S.webuiOk ? 'auto' : 'manual'; } }); }
+  function p2pOn() {
+    var p = S.v.p2p; p.state = 'connecting'; p.port.state = 'off'; p.hs = 0;
+    later(1200, function () { p.state = 'on'; p.port.state = 'req'; p.hs = 1; if (S.launch && p.qbit !== 'outside') launchQbit(); });
+    later(2100, function () { if (p.state === 'off') return; p.port.state = S.nopf ? 'fail' : 'ok'; p.port.renewed = 0; p.port.port = 40000 + Math.floor(Math.random() * 25000); if (p.qbit === 'vpn') p.port.applied = S.autoPort && S.webuiOk ? 'auto' : 'manual'; });
+  }
+  function p2pOff() { var p = S.v.p2p; if (S.quit && p.qbit === 'vpn') p.qbit = 'stopped'; p.state = 'off'; p.port.state = 'off'; }
+  $('popup').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-tun],[data-act],[data-copy],[data-set],[data-imp]'); if (!b || b.disabled) return;
+    var v = S.v;
+    if (b.dataset.tun === 'p2p') { v.p2p.state === 'off' ? p2pOn() : p2pOff(); }
+    else if (b.dataset.tun === 'web') { if (v.web.state === 'off') { v.web.state = 'connecting'; later(900, function () { v.web.state = 'on'; v.web.hs = 1; }); } else v.web.state = 'off'; }
+    else if (b.dataset.act === 'launch') launchQbit();
+    else if (b.dataset.act === 'relaunch') { v.p2p.qbit = 'stopped'; toast('Closing qBittorrent…'); later(700, function () { if (v.p2p.state === 'off') p2pOn(); else launchQbit(); }); }
+    else if (b.dataset.copy) { toast('Port ' + b.dataset.copy + ' copied'); }
+    else if (b.dataset.set) { S[b.dataset.set] = S[b.dataset.set] === false ? true : !S[b.dataset.set]; }
+    else if (b.dataset.imp) { toast('Opens the file chooser (.conf)'); }
+    paint();
+  });
+  $('toSettings').onclick = function () { $('main').hidden = true; $('settings').hidden = false; paint(); $('back').focus(); };
+  $('back').onclick = function () { $('settings').hidden = true; $('main').hidden = false; paint(); };
+  $('pbtn').onclick = function () { var p = $('popup'), open = p.hidden; p.hidden = !open; this.classList.toggle('is-open', open); this.setAttribute('aria-expanded', open); };
+  document.querySelector('.ca-simbar').onclick = function (e) { var b = e.target.closest('[data-sim]'); if (!b) return; var p = S.v.p2p, k = b.dataset.sim;
+    if (k === 'reset') reset();
+    else if (k === 'outside') p.qbit = 'outside';
+    else if (k === 'stale') { if (p.state === 'off') p2pOn(); later(2600, function () { p.state = 'stale'; p.hs = 185; }); later(6000, function () { if (p.state === 'stale') { p.state = 'on'; p.hs = 1; } }); }
+    else if (k === 'nopf') { S.nopf = true; if (p.state !== 'off') p.port.state = 'fail'; }
+    else if (k === 'webui') { S.webuiOk = false; if (p.port.state === 'ok') p.port.applied = 'manual'; }
+    paint(); };
+  setInterval(function () { var v = S.v; ['p2p', 'web'].forEach(function (k) { var t = v[k]; if (t.state === 'on') { t.hs = t.hs >= 119 ? 1 : t.hs + 1; t.rx = Math.max(2e4, t.rx * (0.8 + Math.random() * 0.4)); t.tx = Math.max(5e3, t.tx * (0.8 + Math.random() * 0.4)); } else if (t.state === 'stale') t.hs++; });
+    if (v.p2p.port.state === 'ok') v.p2p.port.renewed = v.p2p.port.renewed >= 44 ? 0 : v.p2p.port.renewed + 1;
+    if (!$('main').hidden) paint(); }, 1000);
+  paint();
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>
