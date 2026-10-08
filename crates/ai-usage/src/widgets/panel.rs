@@ -7,7 +7,7 @@ use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{Column, Row};
 
 use common::ink::Ink;
-use common::panel::{Panel, Type};
+use common::panel::{Panel, SizeClass, Type};
 use common::ui::{mono, space_xxs};
 
 use crate::config::PanelStyle;
@@ -42,17 +42,27 @@ pub struct Look {
     pub label: Type,
     pub value: Type,
     pub bar: f32,
+    /// Bar track and pace tick heights.
+    pub track: f32,
+    pub tick: f32,
+    /// Space between chunks.
+    pub gap: f32,
     pub stale: bool,
 }
 
 impl Look {
     pub fn of(p: &Panel, style: PanelStyle, stale: bool, thickness: f32) -> Self {
         let style = if p.vertical_xs() { PanelStyle::Bars } else { style };
-        let (label, value, bar) =
-            if p.horizontal { (Type::new(10.0, 12.0), Type::new(12.0, 17.0), 32.0) } else { (Type::new(9.0, 11.0), Type::new(11.0, 14.0), 24.0) };
+        let large = p.horizontal && p.class >= SizeClass::M;
+        // DESIGN §2c: text and bars step up on M and larger panels.
+        let (label, value, bar, track, tick, gap) = match (p.horizontal, large) {
+            (true, true) => (Type::new(11.0, 14.0), Type::new(14.0, 20.0), 40.0, 8.0, 12.0, 16.0),
+            (true, false) => (Type::new(10.0, 12.0), Type::new(12.0, 17.0), 32.0, 6.0, 10.0, f32::from(common::ui::space_xs())),
+            (false, _) => (Type::new(9.0, 11.0), Type::new(11.0, 14.0), 24.0, 6.0, 10.0, f32::from(space_xxs())),
+        };
         // Two lines must fit the panel's thickness.
         let value = if p.horizontal { Type::new(value.size, value.line.min((thickness - label.line).floor())) } else { value };
-        Self { horizontal: p.horizontal, style, label, value, bar, stale }
+        Self { horizontal: p.horizontal, style, label, value, bar, track, tick, gap, stale }
     }
 
     /// Fixed chunk width: the widest of the label and the second line, so
@@ -83,7 +93,7 @@ pub fn chunk<'a, M: 'a>(c: &Chunk, look: &Look) -> Element<'a, M> {
             };
             let value = || value_text(pct_cell(*shown, *level == Level::Limit), 4.0, ink, look);
             let bar = || {
-                Meter { fill: *shown, tick: *tick, level: *level, stale: look.stale, track: 6.0, tick_height: 10.0, solid_at_limit: true }
+                Meter { fill: *shown, tick: *tick, level: *level, stale: look.stale, track: look.track, tick_height: look.tick, solid_at_limit: true }
                     .view(Length::Fixed(look.bar))
             };
             match look.style {
@@ -104,13 +114,13 @@ fn value_text<'a, M: 'a>(s: String, n: f32, ink: Option<Ink>, look: &Look) -> El
 /// The robot, then the chunks.
 pub fn content<'a, M: 'a>(robot: Element<'a, M>, chunks: &[Chunk], look: &Look) -> Element<'a, M> {
     if look.horizontal {
-        let mut row = Row::new().spacing(common::ui::space_xs()).align_y(Alignment::Center).push(robot);
+        let mut row = Row::new().spacing(look.gap).align_y(Alignment::Center).push(robot);
         for c in chunks {
             row = row.push(chunk(c, look));
         }
         row.into()
     } else {
-        let mut col = Column::new().spacing(space_xxs()).align_x(Alignment::Center).push(robot);
+        let mut col = Column::new().spacing(look.gap).align_x(Alignment::Center).push(robot);
         for c in chunks {
             col = col.push(chunk(c, look));
         }

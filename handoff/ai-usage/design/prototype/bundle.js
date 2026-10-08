@@ -274,18 +274,40 @@
     if (style === 'bars') return '<span class="' + cls + '"><span class="lbl">' + w.label + '</span>' + bar + '</span>';
     return '<span class="' + cls + '"><span class="lbl">' + w.label + '</span><span class="v">' + val + '</span>' + bar + '</span>';
   }
-  var QUOTA_DEFAULTS = { show: { session: true, weekly: true, fable: true }, resetInPanel: false, style: 'bars', amount: 'used', reset: 'relative', every: '5' };
+  var QUOTA_DEFAULTS = { icon: 'robot', show: { session: true, weekly: true, fable: true }, resetInPanel: false, style: 'bars', amount: 'used', reset: 'relative', every: '5' };
+  /* Panel icon choices. Avatars are full-colour round PNGs; their ring shows Session % LEFT. */
+  var QUOTA_ICONS = [
+    { id: 'robot', name: 'Robot', note: 'Symbolic · follows the theme' },
+    { id: 'cyborg-cyan', name: 'Cyborg · cyan', note: 'Full colour · ring shows session left', src: '../icons/ai-usage-cyborg-cyan.png' },
+    { id: 'cyborg-red', name: 'Cyborg · red', note: 'Full colour · ring shows session left', src: '../icons/ai-usage-cyborg-red.png' }
+  ];
+  var QICON = {}; QUOTA_ICONS.forEach(function (i) { QICON[i.id] = i; });
+  /* Ring geometry for a full-colour icon box of `size` px: stroke = max(2, round(size*0.07)), gap 1px (2px from 48px). */
+  function ringGeom(size) { var st = Math.max(2, Math.round(size * 0.07)), gap = size >= 48 ? 2 : 1; return { st: st, gap: gap, img: size - 2 * (st + gap) }; }
+  /* Session ring: arc length = % left, clockwise from 12 o'clock. used>=100 -> full ring in destructive. */
+  function quotaIconHTML(iconId, session, size, opt) {
+    opt = opt || {}; var ic = QICON[iconId] || QICON.robot;
+    if (!ic.src) return '<span class="ca-icon i-robot ca-qicon" aria-hidden="true"' + (size ? ' style="width:' + size + 'px;height:' + size + 'px"' : '') + '></span>';
+    size = size || 40; var g = ringGeom(size), r = (size - g.st) / 2, c = 2 * Math.PI * r;
+    var used = session ? session.used : null, left = used == null ? 0 : Math.max(0, 100 - used), lvl = used == null ? 'none' : quotaLevel(used) || 'ok';
+    var arc = lvl === 'full' ? c : left / 100 * c;
+    var title = used == null ? 'Session: no data' : (lvl === 'full' ? 'Session limit reached' : 'Session ' + Math.round(left) + '% left');
+    return '<span class="ca-avatar' + (opt.stale ? ' stale' : '') + '" style="width:' + size + 'px;height:' + size + 'px" role="img" aria-label="' + title + '" title="' + title + '">' +
+      '<img alt="" src="' + ic.src + '" style="width:' + g.img + 'px;height:' + g.img + 'px">' +
+      '<svg viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true"><circle class="trk" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" stroke-width="' + g.st + '"/>' +
+      (arc > 0 ? '<circle class="arc ' + lvl + '" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" stroke-width="' + g.st + '" stroke-dasharray="' + arc.toFixed(2) + ' ' + c.toFixed(2) + '" transform="rotate(-90 ' + size / 2 + ' ' + size / 2 + ')"/>' : '') + '</svg></span>';
+  }
   /* Whole panel-button content: robot icon, then one chunk per enabled window (+ optional session reset). */
   function quotaPanelHTML(q, now, st) {
     st = st || QUOTA_DEFAULTS;
     var ws = q.windows.filter(function (w) { return st.show[w.key]; });
-    return '<span class="ca-icon i-robot ca-qicon" aria-hidden="true"></span><span class="ca-qrow">' + ws.map(function (w) { return quotaChunkHTML(w, now, st.style, st.amount); }).join('') + (st.resetInPanel ? resetChunkHTML(q.windows[0], now) : '') + '</span>';
+    return quotaIconHTML(st.icon, q.windows[0], st.iconSize, { stale: st.stale }) + '<span class="ca-qrow">' + ws.map(function (w) { return quotaChunkHTML(w, now, st.style, st.amount); }).join('') + (st.resetInPanel ? resetChunkHTML(q.windows[0], now) : '') + '</span>';
   }
   function resetChunkHTML(w, now) { var f = formatReset(w.resetAt, now, 'relative', true); while (f.length < 5) f = ' ' + f; return '<span class="ca-qchunk percent reset"><span class="lbl">Reset</span><span class="v">' + f + '</span></span>'; }
   function agoText(ts, now) { var m = Math.round((now - ts) / 60e3); return m < 1 ? 'just now' : m < 60 ? m + 'm ago' : Math.floor(m / 60) + 'h ago'; }
 
   window.CosmicApplets = {
     HISTORY: HISTORY, formatRate: formatRate, formatCompact: formatCompact, formatBytes: formatBytes,
-    niceMax: niceMax, ratesHTML: ratesHTML, CHEV_DOWN: CHEV_DOWN, CHEV_UP: CHEV_UP, INDICATORS: INDICATORS, IND: IND, DEFAULT_INDICATOR: DEFAULT_INDICATOR, pickerHTML: pickerHTML, quotaSim: quotaSim, formatReset: formatReset, resetPhrase: resetPhrase, pace: pace, quotaRowHTML: quotaRowHTML, quotaChunkHTML: quotaChunkHTML, resetChunkHTML: resetChunkHTML, quotaPanelHTML: quotaPanelHTML, QUOTA_DEFAULTS: QUOTA_DEFAULTS, agoText: agoText, formatPct: formatPct, formatTemp: formatTemp, formatGHz: formatGHz, formatW: formatW, formatGiB: formatGiB, sysSim: sysSim, drawSeries: drawSeries, meterHTML: meterHTML, sysSectionHTML: sysSectionHTML, paintSysGraphs: paintSysGraphs, metricChunkHTML: metricChunkHTML, drawGraph: drawGraph, sim: sim
+    niceMax: niceMax, ratesHTML: ratesHTML, CHEV_DOWN: CHEV_DOWN, CHEV_UP: CHEV_UP, INDICATORS: INDICATORS, IND: IND, DEFAULT_INDICATOR: DEFAULT_INDICATOR, pickerHTML: pickerHTML, quotaSim: quotaSim, formatReset: formatReset, resetPhrase: resetPhrase, pace: pace, quotaRowHTML: quotaRowHTML, quotaChunkHTML: quotaChunkHTML, resetChunkHTML: resetChunkHTML, quotaPanelHTML: quotaPanelHTML, quotaIconHTML: quotaIconHTML, QUOTA_ICONS: QUOTA_ICONS, QICON: QICON, ringGeom: ringGeom, QUOTA_DEFAULTS: QUOTA_DEFAULTS, agoText: agoText, formatPct: formatPct, formatTemp: formatTemp, formatGHz: formatGHz, formatW: formatW, formatGiB: formatGiB, sysSim: sysSim, drawSeries: drawSeries, meterHTML: meterHTML, sysSectionHTML: sysSectionHTML, paintSysGraphs: paintSysGraphs, metricChunkHTML: metricChunkHTML, drawGraph: drawGraph, sim: sim
   };
 })();

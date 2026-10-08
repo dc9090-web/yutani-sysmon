@@ -12,7 +12,7 @@ use cosmic::widget::{self, Column, Row};
 use cosmic::{Element, applet, theme};
 
 use common::ink::Ink;
-use common::panel::Panel;
+use common::panel::{Panel, SizeClass};
 use common::ui::{self, space_m, space_xs, space_xxs, space_xxxs};
 
 use chrono::{DateTime, TimeDelta, Utc};
@@ -20,15 +20,19 @@ use chrono::{DateTime, TimeDelta, Utc};
 use crate::api::{self, Outcome};
 use crate::auth::NoLogin;
 use crate::auth::{self, Account, Auth, Paths};
-use crate::config::{APP_ID, Amount, Config, PanelStyle, REFRESH_CHOICES, ResetFormat, TIME_APPLET, TimeConfig};
+use crate::config::{APP_ID, Amount, Config, PanelIcon, PanelStyle, REFRESH_CHOICES, ResetFormat, TIME_APPLET, TimeConfig};
 use crate::fl;
 use crate::format::{self, Live};
 use crate::model::{Kind, Snapshot, State, Usage};
 use crate::scheduler::{self, Scheduler};
+use crate::widgets::avatar::{self, Avatar, Ring};
 use crate::widgets::banner::banner;
 use crate::widgets::header::{Header, header};
 use crate::widgets::panel::{self, Chunk, Look, Value};
 use crate::widgets::row::{self, Ctx, lower_first, name, quota_row};
+
+/// Height of the panel-icon tiles on the settings page.
+const TILE_HEIGHT: f32 = 80.0;
 
 /// Data older than this isn't shown at all (SPEC §9).
 const DISCARD_AFTER: TimeDelta = TimeDelta::hours(24);
@@ -82,6 +86,7 @@ pub enum Message {
     /// A planned fetch is due, if the generation still matches.
     Wake(u64),
     Show(Toggle, bool),
+    Icon(PanelIcon),
     /// Demo mode: the next scene.
     #[cfg(feature = "demo")]
     DemoNext,
@@ -376,8 +381,31 @@ impl App {
         chunks
     }
 
-    /// The tooltip and accessible name.
-    fn tooltip(&self) -> String {
+    /// The session ring: the live session % used, or nothing to show.
+    fn ring(&self) -> Ring {
+        let used = self.live().iter().find(|l| l.kind == Kind::Session).map(|l| l.used);
+        Ring { used, stale: self.stale() }
+    }
+
+    /// The robot (symbolic, `symbolic` px) or the chosen avatar with its
+    /// ring in a `boxed` px box.
+    fn icon<'a>(&self, icon: PanelIcon, symbolic: f32, boxed: f32) -> Element<'a, Message> {
+        let scale = self.core.scale_factor();
+        match icon {
+            PanelIcon::Robot => robot(symbolic as u16),
+            PanelIcon::CyborgCyan => avatar::view(Avatar::Cyan, self.ring(), boxed, scale),
+            PanelIcon::CyborgRed => avatar::view(Avatar::Red, self.ring(), boxed, scale),
+        }
+    }
+
+    /// The tooltip and accessible name, plus the ring's reading when an
+    /// avatar is shown.
+    fn tooltip(&self, avatar: bool) -> String {
+        let text = self.summary();
+        if avatar { format!("{text}; {}", self.ring().label()) } else { text }
+    }
+
+    fn summary(&self) -> String {
         match &self.state {
             State::NotSignedIn(_) => return fl!("a11y-signed-out"),
             State::Unrecognised(_) => return fl!("a11y-format"),
@@ -430,18 +458,19 @@ impl App {
         let thickness = if p.horizontal { ih } else { iw } + 2.0 * f32::from(minor);
         let look = Look::of(&p, self.config.style, self.stale(), thickness);
         let chunks = self.chunks(p.vertical_xs());
-        let content = panel::content(robot(if p.horizontal { ih } else { iw } as u16), &chunks, &look);
+        // Avatars use the non-symbolic size; at XS they fall back to the robot.
+        let icon = if p.class == SizeClass::XS { PanelIcon::Robot } else { self.config.icon };
+        let boxed = f32::from(self.core.applet.suggested_size(false).0);
+        let content = panel::content(self.icon(icon, if p.horizontal { ih } else { iw }, boxed), &chunks, &look);
+        let thickness = if icon == PanelIcon::Robot { thickness } else { thickness.max(boxed) };
 
-        let (pad, w, h) = if p.horizontal {
-            ([0, major], Length::Shrink, Length::Fixed(ih + 2.0 * f32::from(minor)))
-        } else {
-            ([major, 0], Length::Fixed(iw + 2.0 * f32::from(minor)), Length::Shrink)
-        };
+        let (pad, w, h) =
+            if p.horizontal { ([0, major], Length::Shrink, Length::Fixed(thickness)) } else { ([major, 0], Length::Fixed(thickness), Length::Shrink) };
         let button = widget::button::custom(widget::container(content).center_x(w).center_y(h))
             .padding(pad)
             .class(theme::Button::AppletIcon)
             .on_press_with_rectangle(|offset, bounds| Message::TogglePopup(bounds, offset));
-        let tip = self.core.applet.applet_tooltip::<Message>(button, self.tooltip(), self.popup.is_some(), Message::Surface, None);
+        let tip = self.core.applet.applet_tooltip::<Message>(button, self.tooltip(icon != PanelIcon::Robot), self.popup.is_some(), Message::Surface, None);
         self.core.applet.autosize_window(tip).into()
     }
 
@@ -485,7 +514,7 @@ impl App {
                 can_refresh: self.can_refresh(),
                 fetching: self.fetching,
             },
-            robot(20),
+            self.icon(self.config.icon, 20.0, 32.0),
             Message::ManualRefresh,
         )
     }
@@ -552,8 +581,51 @@ impl App {
             )
             .into()
         }
+        let mut tiles = Row::new().spacing(space_xs());
+        for i in PanelIcon::ALL {
+            let name = match i {
+                PanelIcon::Robot => fl!("icon-robot"),
+                PanelIcon::CyborgCyan => fl!("icon-cyborg-cyan"),
+                PanelIcon::CyborgRed => fl!("icon-cyborg-red"),
+            };
+            // The image button would tint the robot in the accent; keep it in the text colour.
+            let icon = if i == PanelIcon::Robot {
+                widget::icon(widget::icon::from_svg_bytes(ROBOT).symbolic(true)).size(28).class(Ink::On.svg()).into()
+            } else {
+                self.icon(i, 28.0, 40.0)
+            };
+            let picture = widget::container(icon).center_x(Length::Fill).height(Length::Fixed(40.0)).align_y(Alignment::Center);
+            let tile = widget::container(
+                Column::new()
+                    .spacing(space_xxs())
+                    .align_x(Alignment::Center)
+                    .push(picture)
+                    .push(widget::text::caption(name).wrapping(cosmic::iced::widget::text::Wrapping::None).class(Ink::On.text())),
+            )
+            .padding([space_xs(), 0])
+            .width(Length::Fill)
+            .height(Length::Fixed(TILE_HEIGHT))
+            .align_x(Alignment::Center)
+            .class(theme::Container::custom(|t| widget::container::Style {
+                background: Some(Ink::Component.color(t).into()),
+                border: cosmic::iced::Border { radius: t.cosmic().corner_radii.radius_s.into(), ..Default::default() },
+                ..Default::default()
+            }));
+            tiles = tiles.push(
+                widget::button::custom(tile)
+                    .class(theme::Button::Image)
+                    .selected(self.config.icon == i)
+                    .padding(0)
+                    .width(Length::Fill)
+                    .on_press(Message::Icon(i)),
+            );
+        }
+        let note = if self.config.icon == PanelIcon::Robot { fl!("icon-note-symbolic") } else { fl!("icon-note-avatar") };
         Column::new()
             .push(ui::back_header(fl!("applet-settings"), fl!("back"), Message::Page(Page::Main)))
+            .push(ui::group_label(fl!("panel-icon")))
+            .push(applet::padded_control(Column::new().spacing(space_xxs()).push(tiles).push(widget::text::caption(note).class(Ink::Muted.text()))))
+            .push(ui::inset_divider())
             .push(ui::group_label(fl!("show-in-panel")))
             .push(toggles)
             .push(ui::inset_divider())
@@ -635,6 +707,9 @@ impl cosmic::Application for App {
         #[cfg(feature = "demo")]
         if crate::demo::enabled() {
             app.show_scene(crate::demo::first());
+            if let Some(i) = crate::demo::icon() {
+                app.config.icon = i;
+            }
             if crate::demo::shot_path().is_some() {
                 return (
                     app,
@@ -696,7 +771,14 @@ impl cosmic::Application for App {
                 }
             }
             Message::Config(c) => {
-                let c = c.enforce();
+                #[cfg_attr(not(feature = "demo"), expect(unused_mut))]
+                let mut c = c.enforce();
+                #[cfg(feature = "demo")]
+                if self.demo.is_some()
+                    && let Some(i) = crate::demo::icon()
+                {
+                    c.icon = i;
+                }
                 if c != self.config {
                     tracing::debug!(config = ?c, "config changed");
                     let retime = c.refresh_minutes != self.config.refresh_minutes;
@@ -741,6 +823,7 @@ impl cosmic::Application for App {
                 Toggle::SessionReset => self.save(|c, h| c.set_show_session_reset(h, on)),
             },
             Message::Segment(seg, e) => return self.segment(seg, e),
+            Message::Icon(i) => self.save(|c, h| c.set_icon(h, i)),
             #[cfg(feature = "demo")]
             Message::TakeShot => {
                 if let Some(id) = self.core.main_window_id() {

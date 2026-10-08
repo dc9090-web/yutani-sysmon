@@ -13,6 +13,19 @@ pub enum PanelStyle {
     Both,
 }
 
+/// The panel's leading icon.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PanelIcon {
+    #[default]
+    Robot,
+    CyborgCyan,
+    CyborgRed,
+}
+
+impl PanelIcon {
+    pub const ALL: [Self; 3] = [Self::Robot, Self::CyborgCyan, Self::CyborgRed];
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Amount {
     #[default]
@@ -55,6 +68,7 @@ pub const REFRESH_CHOICES: [u8; 3] = [1, 5, 15];
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, CosmicConfigEntry)]
 #[version = 1]
 pub struct Config {
+    pub icon: PanelIcon,
     pub show_session: bool,
     pub show_weekly: bool,
     pub show_fable: bool,
@@ -68,6 +82,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            icon: PanelIcon::Robot,
             show_session: true,
             show_weekly: true,
             show_fable: true,
@@ -120,6 +135,7 @@ mod tests {
     fn defaults() {
         let d = Config::default();
         assert!(d.show_session && d.show_weekly && d.show_fable && !d.show_session_reset);
+        assert_eq!(d.icon, PanelIcon::Robot);
         assert_eq!((d.style, d.amount, d.reset_format, d.refresh_minutes), (PanelStyle::Bars, Amount::Used, ResetFormat::Relative, 5));
         assert_eq!(d.clone().enforce(), d);
     }

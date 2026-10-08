@@ -72,3 +72,14 @@ minutes = { $n } min
 # Accessible name / tooltip
 a11y-window = { $name } { $pct }% { $amount }, { $reset }
 a11y-signed-out = Claude usage: not signed in
+
+# Panel icon
+panel-icon = Panel icon
+icon-robot = Robot
+icon-cyborg-cyan = Cyborg · cyan
+icon-cyborg-red = Cyborg · red
+icon-note-symbolic = Symbolic · follows the theme
+icon-note-avatar = Full colour · ring shows session left
+ring-left = Session { $pct }% left
+ring-limit = Session limit reached
+ring-no-data = Session: no data

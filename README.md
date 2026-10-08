@@ -19,9 +19,9 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-login_reused-d97757)](https://docs.anthropic.com/en/docs/claude-code)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-green)](LICENSE)
 
-<img src="docs/screenshots/panel.png" alt="The COSMIC top panel: the AI Usage robot with 5h, Week and Fable bars; System Monitor showing CPU 13 %, GPU 7 %, RAM 36 %; and Network Traffic showing a sparkline and RX/TX rates" width="910">
+<img src="docs/screenshots/panel.png" alt="The COSMIC top panel: the AI Usage Cyborg avatar with its session ring and 5h, Week and Fable bars; System Monitor showing CPU 9 %, GPU 9 %, RAM 29 %; and Network Traffic showing a sparkline and RX/TX rates" width="962">
 
-*An XS top panel: AI Usage, System Monitor and Network Traffic, left to right. Values stay centred and the width never moves.*
+*An S top panel: AI Usage (with the Cyborg · cyan icon), System Monitor and Network Traffic, left to right. Values stay centred and the width never moves.*
 
 </div>
 
@@ -138,9 +138,9 @@ The applet picks it up within 30 s, with no restart. To undo it, delete the rule
 ## 🤖 AI Usage
 
 <div align="center">
-<img src="docs/screenshots/ai-usage-popup.png" alt="AI Usage popup: Claude, Max plan, dc@example.com, updated 2m ago; Session 42 % used, resets in 2h 12m, 14 % under pace; Weekly 61 % used, 6 % ahead of pace; Fable 84 % used in the warning colour, 29 % ahead of pace" width="359">
+<img src="docs/screenshots/ai-usage-popup.png" alt="AI Usage popup with the Cyborg avatar and its session ring in the header: Claude, Max plan, dc@example.com, updated 2m ago; Session 42 % used, resets in 2h 12m, 14 % under pace; Weekly 61 % used, 6 % ahead of pace; Fable 84 % used in the warning colour, 29 % ahead of pace" width="359">
 &nbsp;&nbsp;
-<img src="docs/screenshots/ai-usage-settings.png" alt="AI Usage settings: Show in panel togglers for Session, Weekly, Fable and Session reset; Panel style, Show, Reset times and Refresh every segmented controls" width="359">
+<img src="docs/screenshots/ai-usage-settings.png" alt="AI Usage settings: Panel icon tiles for Robot, Cyborg · cyan (selected) and Cyborg · red; Show in panel togglers for Session, Weekly, Fable and Session reset; Panel style, Show, Reset times and Refresh every segmented controls" width="359">
 </div>
 
 <div align="center">
@@ -151,8 +151,9 @@ The applet picks it up within 30 s, with no restart. To undo it, delete the rule
 
 *Screenshots use the demo data (`just demo`), not a real account.*
 
-A robot, then one small bar per window: **5h** (Session), **Week** and **Fable**, in that order. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 2h 13m" or "Resets Sat 9:00 AM") and pace ("14% under pace").
+An icon, then one small bar per window: **5h** (Session), **Week** and **Fable**, in that order. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 2h 13m" or "Resets Sat 9:00 AM") and pace ("14% under pace").
 
+- 🤖 **Panel icon:** the symbolic **Robot** (default), or a full-colour **Cyborg** avatar (cyan or red) wrapped in a **session ring**: a fuel gauge of the 5-hour window's % *left*, drawn from 12 o'clock, accent → warning at 80 % used, and a full destructive ring at the limit. The ring ignores the Used/Left setting and dims when data is stale. Avatars need panel size S or larger; at XS the Robot shows.
 - 🎚️ **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the 5-hour window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
 - 🔑 **Login:** it reads Claude Code's own login (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`). It **never writes, refreshes or rotates it**; when the login expires, run `claude` once and the applet picks it up within seconds.
 - 🌐 **Network:** one `GET https://api.anthropic.com/api/oauth/usage` every 1, 5 or 15 minutes (±10 % jitter), on opening the popup if the data is over a minute old, and just after each window resets. It backs off while offline and honours `Retry-After`. No telemetry and no usage cache on disk.
@@ -160,7 +161,7 @@ A robot, then one small bar per window: **5h** (Session), **Week** and **Fable**
 - 🚦 **States:** not signed in, login expired, offline, rate limited, format not recognised and no Fable limit each have their own banner or header text; stale values are dimmed.
 - 🕒 **Clock time** follows the COSMIC time applet's 12/24-hour setting.
 
-`just demo` runs the popup in a window, cycling through every state every 10 s from the test fixtures, with no login and no network (`AI_USAGE_DEMO_SCENE=n` starts on scene *n*; `AI_USAGE_SHOT=file.pam` saves the window and exits, which is how the screenshots above were made).
+`just demo` runs the popup in a window, cycling through every state every 10 s from the test fixtures, with no login and no network (`AI_USAGE_DEMO_SCENE=n` starts on scene *n*; `AI_USAGE_DEMO_ICON=cyan|red` shows an avatar without saving it; `AI_USAGE_SHOT=file.pam` saves the window and exits, which is how the screenshots above were made).
 
 ---
 
@@ -211,7 +212,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | --- | --- | --- |
 | Network Traffic | `~/.config/cosmic/io.github.dc.CosmicAppletNetTraffic/v1/` | `mode`, `indicator`, `adapter` |
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
-| AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `show_session`, `show_weekly`, `show_fable`, `show_session_reset`, `style`, `amount`, `reset_format`, `refresh_minutes` |
+| AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_session`, `show_weekly`, `show_fable`, `show_session_reset`, `style`, `amount`, `reset_format`, `refresh_minutes` |
 
 ---
 
@@ -233,6 +234,6 @@ The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSys
 
 ## 📄 Licence
 
-GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons and the AI Usage robot are custom.
+GPL-3.0-or-later, like the stock COSMIC applets. Icons in `handoff/*/design/icons` come from [pop-os/cosmic-icons](https://github.com/pop-os/cosmic-icons) (CC BY-SA 4.0); the two `net-*-bar-symbolic` icons and the AI Usage robot are custom. The two AI Usage Cyborg avatars are cropped from illustrations supplied by the project owner, who holds the rights to distribute them here.
 
 <div align="center"><sub>ユタニ重工 · Yutani system monitoring</sub></div>

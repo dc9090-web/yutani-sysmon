@@ -86,3 +86,14 @@ a11y-offline = offline, updated { $time } ago
 a11y-offline-never = offline
 a11y-rate-limited = rate limited, retry in { $time }
 a11y-expired = Claude Code login expired
+
+# Panel icon
+panel-icon = Panel icon
+icon-robot = Robot
+icon-cyborg-cyan = Cyborg · cyan
+icon-cyborg-red = Cyborg · red
+icon-note-symbolic = Symbolic · follows the theme
+icon-note-avatar = Full colour · ring shows session left
+ring-left = Session { $pct }% left
+ring-limit = Session limit reached
+ring-no-data = Session: no data

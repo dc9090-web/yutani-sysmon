@@ -30,7 +30,8 @@ Each window has a percentage used, a reset time and a pace.
 | App ID | `io.github.dc.CosmicAppletAiUsage` (placeholder; change before publishing) |
 | Binary / crate | `cosmic-applet-ai-usage` |
 | Desktop entry | `resources/io.github.dc.CosmicAppletAiUsage.desktop` |
-| Icon | `resources/icons/hicolor/scalable/apps/<APP_ID>-symbolic.svg`: the custom robot. The same file is embedded for the panel and the popup header. |
+| Icon (applet list) | `resources/icons/hicolor/scalable/apps/<APP_ID>-symbolic.svg`: the custom robot |
+| Panel icons | The robot (embedded SVG), plus two full-colour avatars, `resources/icons/avatars/ai-usage-cyborg-{cyan,red}-<px>.png` (24–128 px, round, transparent corners, **no baked ring**). Embed them with `include_bytes!`. |
 | Strings | `i18n/en/cosmic_applet_ai_usage.ftl` |
 
 ## 3. Authentication: read-only reuse of Claude Code's login
@@ -120,7 +121,10 @@ Check this against the installed Claude Code version. If it has changed, say so 
 ## 7. Panel button
 
 - **Build:** `button::custom(row![robot, chunks…].spacing(space_xs).align_y(Center)).class(Button::AppletIcon)`, padded with `core.applet.suggested_padding(true)`, inside `core.applet.autosize_window`.
-- **Robot icon:** always first, sized to `core.applet.suggested_size(true)`, `.symbolic(true)`.
+- **Leading icon:** always first. Setting `icon`; default `Robot`.
+  - **Robot:** sized to `core.applet.suggested_size(true)`, `.symbolic(true)`, no ring.
+  - **Cyborg (cyan or red):** a full-colour avatar at `core.applet.suggested_size(false)` (24 / 32 / 40 / 48 / 56 for XS–XL), with the **session ring** (§7.1). Pick the pre-scaled PNG for the size (×2 on HiDPI); never `.symbolic(true)`.
+  - **At panel size XS,** an avatar setting falls back to the Robot.
 - **Chunks:** one per enabled window, **in the order Session, Weekly, Fable**, then the optional `Reset` chunk (the session countdown, compact form, 5-character field).
 - **Styles** (setting `style`; default **Bars**):
   - **Percent:** `column![label, value]`, with the value right-aligned in a 4-character field.
@@ -132,9 +136,24 @@ Check this against the installed Claude Code version. If it has changed, say so 
 - **Vertical XS:** robot plus bars only.
 - **Width:** constant for a given configuration; values never change it.
 - **Stale data** (offline, rate limited, expired): bars at 45% opacity, values muted. The robot stays at full opacity.
-- **Not signed in, or no data:** the robot only, with a tooltip.
+- **Not signed in, or no data:** the icon only (an avatar shows its track only), with a tooltip.
 - **Tooltip and accessible name:** "Session 42% used, resets in 2h 13m; Weekly 61% used, resets in 3d 4h; Fable 84% used, resets in 3d 4h", plus a state suffix ("· offline, updated 25m ago").
 - **Click:** toggles the popup.
+
+### 7.1 Session ring (avatar icons only)
+
+- **Build:** `stack![image(avatar), canvas(ring)]`. For an icon box of `size` px:
+  - stroke = `max(2, round(size × 0.07))`
+  - gap = 1 (2 when size ≥ 48)
+  - image diameter = `size − 2 × (stroke + gap)`
+  - ring radius = `(size − stroke) / 2`
+- **Track:** a full circle in `background.component.base`.
+- **Arc:** starts at 12 o'clock and runs clockwise. Its length is **Session % left** = 100 − used, **regardless of the Used/Left setting** (the ring is a fuel gauge). Round caps.
+- **Colour:** `accent` while used < 80, `warning` at 80–99. At 100 the ring is **full** and `destructive`, with butt caps.
+- **Stale** (offline, rate limited, login expired): the arc at 45% opacity.
+- **No data** (not signed in, format not recognised, no `five_hour`): track only.
+- **Tooltip and accessible name:** "Session 58% left" / "Session limit reached" / "Session: no data". Append this to the button's main tooltip.
+- **Redraw** only when the session used % or the stale flag changes. The canvas cache must not redraw every frame.
 
 ## 8. Popup
 
@@ -142,7 +161,7 @@ Check this against the installed Claude Code version. If it has changed, say so 
 
 ### 8.1 Main page
 
-1. **Header:** robot (20px), "Claude" (`text::heading`) and a plan chip, with the email (caption) under them. On the right, the freshness text (caption, muted; warning when stale) and a refresh icon button (`view-refresh-symbolic`).
+1. **Header:** the chosen icon (Robot 20px; avatars 32px with the session ring), "Claude" (`text::heading`) and a plan chip, with the email (caption) under them. On the right, the freshness text (caption, muted; warning when stale) and a refresh icon button (`view-refresh-symbolic`).
 2. Inset divider.
 3. **State banner**, if there is one (see §9).
 4. **One quota row per available window**, in the order Session, Weekly, Fable, regardless of the panel toggles. Each row:
@@ -154,13 +173,14 @@ Check this against the installed Claude Code version. If it has changed, say so 
 ### 8.2 Settings page
 
 1. Back button and "Applet settings", then a full-width divider.
-2. **Show in panel:** toggler rows for Session, Weekly and Fable (all on by default) and "Session reset" (off).
+2. **Panel icon:** three picture tiles in a row (Robot, Cyborg · cyan, Cyborg · red), each showing the live icon at 40px (Robot 28px). The selected tile has a 2px accent border. Below them, a caption: "Symbolic · follows the theme" or "Full colour · ring shows session left". This is a radio group for a11y.
+3. **Show in panel:** toggler rows for Session, Weekly and Fable (all on by default) and "Session reset" (off).
    - At least one window stays on; the last enabled toggler is disabled, with a caption saying why.
    - The Fable toggler is disabled with the caption `no-fable-limit` when the account has no Fable window.
-3. **Panel style:** a segmented control with Percent, Bars (default) and Both.
-4. **Show:** Used (default) or Left.
-5. **Reset times:** Relative (default) or Clock time.
-6. **Refresh every:** 1 min, 5 min (default) or 15 min.
+4. **Panel style:** a segmented control with Percent, Bars (default) and Both.
+5. **Show:** Used (default) or Left.
+6. **Reset times:** Relative (default) or Clock time.
+7. **Refresh every:** 1 min, 5 min (default) or 15 min.
 
 Every change applies immediately and persists.
 
@@ -169,11 +189,11 @@ Every change applies immediately and persists.
 | State | Trigger | Panel | Popup |
 |---|---|---|---|
 | Normal | 200 OK, fresh | Live bars | Rows |
-| Not signed in | No credentials file, or `user:profile` missing | Robot only | Banner: "Sign in with Claude Code". Body: run `claude` and log in. No rows. |
+| Not signed in | No credentials file, or `user:profile` missing | Icon only (avatar: track only) | Banner: "Sign in with Claude Code". Body: run `claude` and log in. No rows. |
 | Login expired | `expiresAt` ≤ now, or 401/403 | Stale bars | Banner: "Claude Code login expired · Open Claude Code once to renew it." Rows dimmed. |
 | Offline | Network error | Stale bars | Header: "Offline · 25m ago" (warning). Rows dimmed. |
 | Rate limited | 429 | Stale bars | Header: "Rate limited · retry in 4m" (warning). Rows dimmed. |
-| Format not recognised | §4.1 | Robot only | Banner: "Usage format not recognised", with a "Copy diagnostics" button that copies the HTTP status and the JSON **keys only**, never the values or the token. |
+| Format not recognised | §4.1 | Icon only (avatar: track only) | Banner: "Usage format not recognised", with a "Copy diagnostics" button that copies the HTTP status and the JSON **keys only**, never the values or the token. |
 | No Fable limit | No matching `limits[]` entry | No Fable chunk | No Fable row; caption line "No Fable limit on this plan."; Fable toggler disabled |
 | Limit reached | used ≥ 100 | Value and fill in `destructive`, no tick | Row: "Limit reached · resets in 1h 05m" (destructive) |
 
@@ -183,6 +203,7 @@ Stale data older than 24 h is discarded: show the banner without rows.
 
 ```text
 Config {
+  icon: PanelIcon = Robot          // Robot | CyborgCyan | CyborgRed
   show_session: bool = true
   show_weekly: bool = true
   show_fable: bool = true

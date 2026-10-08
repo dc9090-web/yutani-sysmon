@@ -30,6 +30,17 @@ pub fn save_shot(path: &std::path::Path, shot: &cosmic::iced::window::Screenshot
     f.flush()
 }
 
+/// `AI_USAGE_DEMO_ICON=cyan|red|robot` shows that panel icon without saving it.
+pub fn icon() -> Option<crate::config::PanelIcon> {
+    use crate::config::PanelIcon;
+    match std::env::var("AI_USAGE_DEMO_ICON").ok()?.as_str() {
+        "cyan" => Some(PanelIcon::CyborgCyan),
+        "red" => Some(PanelIcon::CyborgRed),
+        "robot" => Some(PanelIcon::Robot),
+        _ => None,
+    }
+}
+
 pub fn enabled() -> bool {
     std::env::var_os("AI_USAGE_DEMO").is_some_and(|v| !v.is_empty() && v != "0")
 }
@@ -62,7 +73,7 @@ pub struct Scene {
     pub snapshot: Option<Snapshot>,
 }
 
-pub const SCENES: usize = 10;
+pub const SCENES: usize = 11;
 
 pub fn scene(i: usize, now: DateTime<Utc>) -> Scene {
     let max = Account { plan: Some("Max".into()), email: Some("dc@example.com".into()) };
@@ -77,6 +88,14 @@ pub fn scene(i: usize, now: DateTime<Utc>) -> Scene {
         6 => (max, State::Expired, snap("normal_with_fable", 180)),
         7 => (Account::default(), State::NotSignedIn(NoLogin::Missing), None),
         8 => (Account::default(), State::NotSignedIn(NoLogin::NoProfileScope), None),
+        9 => {
+            // Session at 87%: the avatar ring shows 13% left in the warning colour.
+            let mut s = snap("normal_with_fable", 1);
+            if let Some(w) = s.as_mut().and_then(|s| s.usage.windows.iter_mut().find(|w| w.kind == crate::model::Kind::Session)) {
+                w.used = 87.0;
+            }
+            (max, State::Normal, s)
+        }
         _ => (max, State::Unrecognised(Diagnostics { status: 200, keys: api::key_paths(&json("unknown_shape")) }), None),
     };
     Scene { account, state, snapshot }

@@ -32,7 +32,8 @@ This applet is a sibling of the Network Traffic and System Monitor applets. If t
 - **One host only: `api.anthropic.com`.** No telemetry; no usage cache on disk.
 - **The endpoint is undocumented.** Keep it isolated in `api.rs`. Unknown shapes go to the "Format not recognised" state, never a panic.
 - **Theme values come from `theme.cosmic()`.** The quota fill is the user's accent (`cosmic.accent`); the warning and limit colours are `cosmic.warning` / `cosmic.destructive`.
-- **Window order is fixed:** Session, Weekly, Fable. The robot icon always comes first in the panel.
+- **Window order is fixed:** Session, Weekly, Fable. The chosen icon (Robot or a Cyborg avatar) always comes first in the panel.
+- **Avatar ring = Session % left**, always (SPEC §7.1). Use pre-scaled PNGs; never scale at runtime below the nearest size.
 - **The panel width never changes as values change.** Use the mono font and fixed-width fields.
 - **No I/O in `view`.** Use a scheduler subscription, and a 30 s local tick for countdowns.
 - Unit-test `format.rs` (every example in SPEC §6), `api.rs` (every fixture) and `auth.rs` (every fake home).
@@ -43,12 +44,12 @@ This applet is a sibling of the Network Traffic and System Monitor applets. If t
 1. **Skeleton.** The robot shows in the panel; the popup opens and closes; config loads with defaults and enforces the invariant.
 2. **Auth + API.** Credentials discovery, scope and expiry checks, the file watcher, the usage request and the parser. All fixture tests pass. Log state transitions at debug level, never tokens.
 3. **Scheduler.** Interval with jitter, refresh on popup open, manual refresh with debounce, backoff, Retry-After, reset-time wakeups, and the 30 s local tick.
-4. **Panel.** Robot, then the three styles × used/left, plus the reset chunk; horizontal and vertical, XS–XL; levels; stale dimming; tooltip.
+4. **Panel.** Icon choice (Robot, avatars with session ring), then the three styles × used/left, plus the reset chunk; horizontal and vertical, XS–XL; levels; stale dimming; tooltip.
 5. **Popup.** Header, banners and rows (pace tick, reset text, pace text); the settings page.
 6. **States and polish.** Every SPEC §9 state, the demo mode, a11y, i18n, then the ACCEPTANCE pass.
 
 ## Open decisions (ask DC; don't guess)
 
 - The final App ID and crate name. `io.github.dc.CosmicAppletAiUsage` is a placeholder.
-- The licence.
+- The licence. **The two avatar images come from illustrations DC supplied; their licence isn't recorded. Confirm redistribution rights before any public release.**
 - At 100% used in **dark** mode, COSMIC's warning (#ffa37d) and destructive (#ffa09a) colours are nearly identical. Ask whether the panel should also show `MAX` and a solid bar at 100%. The design currently only drops the pace tick.

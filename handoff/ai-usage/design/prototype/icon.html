@@ -1,0 +1,31 @@
+<!doctype html>
+<html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>QuotaIcon — preview</title>
+<style>
+  body { background: var(--bg-component); }
+  .t { display:grid; grid-template-columns: 150px repeat(6, 72px); align-items:center; row-gap:14px; padding:16px 24px; }
+  .h { font:600 12px/17px var(--font-sans); color:var(--on-bg-muted); }
+  .n { font:700 14px/21px var(--font-sans); color:var(--on-bg); }
+  .cell { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .cell .ca-tag { text-align:center; }
+  .sizes { display:flex; align-items:flex-end; gap:16px; padding:0 24px 16px; }
+</style></head>
+<body>
+<div class="proto-bar"><a href="index.html">Prototype</a><a href="panel.html">Panel button</a><a href="icon.html" aria-current="page">Panel icon + ring</a><a href="rows.html">Quota rows</a><a href="header.html">Header</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="t" id="t"></div>
+<div class="sizes" id="sizes"></div>
+<script>
+  var A = window.CosmicApplets, cases = [
+    { h: '20% used', w: { used: 20 } }, { h: '58% used', w: { used: 58 } }, { h: '87% used', w: { used: 87 } },
+    { h: '100% · limit', w: { used: 100 } }, { h: 'Stale', w: { used: 58 }, stale: true }, { h: 'No data', w: null }
+  ];
+  var t = document.getElementById('t');
+  t.innerHTML = '<span class="h">Icon · 48px (L)</span>' + cases.map(function (c) { return '<span class="h">' + c.h + '</span>'; }).join('') +
+    A.QUOTA_ICONS.map(function (ic) {
+      return '<span class="n">' + ic.name + '</span>' + cases.map(function (c) { return '<div class="cell">' + A.quotaIconHTML(ic.id, c.w, ic.src ? 48 : 32, { stale: c.stale }) + '</div>'; }).join('');
+    }).join('');
+  document.getElementById('sizes').innerHTML = [24, 32, 40, 48, 56].map(function (s) { return '<div class="cell">' + A.quotaIconHTML('cyborg-red', { used: 42 }, s) + '<span class="ca-tag">' + s + 'px</span></div>'; }).join('') +
+    '<span class="ca-tag" style="margin-left:8px">Panel XS · S · M · L · XL (non-symbolic sizes). Ring stroke 2·2·3·3·4px.</span>';
+</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('ca-theme');if(s)r.dataset.theme=s;}catch(e){}
+function l(){b.textContent='Theme: '+r.dataset.theme;}l();b.onclick=function(){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('ca-theme',r.dataset.theme);}catch(e){}l();};})();</script>
+</body></html>

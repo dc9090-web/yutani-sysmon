@@ -271,6 +271,35 @@ body { margin: 0; background: var(--bg); color: var(--on-bg); font-family: var(-
 .ca-panel.v .ca-qicon { width: var(--panel-icon-s); height: var(--panel-icon-s); }
 .ca-qhead .ca-qicon { width: 20px; height: 20px; }
 
+/* AI Usage avatar icon with live session ring (arc = % of session left) */
+.ca-avatar { position: relative; display: inline-grid; place-items: center; flex: none; }
+.ca-avatar img { border-radius: 50%; display: block; }
+.ca-avatar svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ca-avatar .trk { fill: none; stroke: var(--meter-track); }
+.ca-avatar .arc { fill: none; stroke-linecap: round; }
+.ca-avatar .arc.ok { stroke: var(--quota-fill); } .ca-avatar .arc.warn { stroke: var(--quota-warn); } .ca-avatar .arc.full { stroke: var(--quota-full); stroke-linecap: butt; }
+.ca-avatar.stale .arc { opacity: .45; }
+/* icon picker tiles (settings) */
+.ca-iconpick { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-xxs); }
+.ca-iconpick button { display: flex; flex-direction: column; align-items: center; gap: var(--space-xxxs); padding: var(--space-xs) var(--space-xxxs) var(--space-xxs); border: 2px solid transparent; border-radius: var(--radius-s); background: var(--bg-component); color: var(--on-bg); cursor: default; }
+.ca-iconpick button:hover { background: var(--bg-component-hover); }
+.ca-iconpick button[aria-checked="true"] { border-color: var(--accent); }
+.ca-iconpick button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ca-iconpick .n { font: 400 12px/17px var(--font-sans); text-align: center; }
+/* Panel size classes (bar = symbolic icon + 2 × padding). Full-colour icons use the non-symbolic size. */
+.ca-panel.h.sz-s  { height: 40px; } .ca-panel.h.sz-s  .ca-pbtn { height: 40px; }
+.ca-panel.h.sz-m  { height: 56px; } .ca-panel.h.sz-m  .ca-pbtn { height: 56px; padding: 0 16px; }
+.ca-panel.h.sz-l  { height: 64px; } .ca-panel.h.sz-l  .ca-pbtn { height: 64px; padding: 0 18px; }
+.ca-panel.h.sz-xl { height: 80px; } .ca-panel.h.sz-xl .ca-pbtn { height: 80px; padding: 0 20px; }
+.ca-panel.sz-m .ca-qicon { width: 28px; height: 28px; } .ca-panel.sz-l .ca-qicon { width: 32px; height: 32px; } .ca-panel.sz-xl .ca-qicon { width: 48px; height: 48px; }
+/* M and larger: panel text steps up to monotext, bars to 40 × 8 */
+.ca-panel.sz-m .ca-qchunk, .ca-panel.sz-l .ca-qchunk, .ca-panel.sz-xl .ca-qchunk { grid-template-rows: 14px 20px; }
+.ca-panel.sz-m .ca-qchunk .lbl, .ca-panel.sz-l .ca-qchunk .lbl, .ca-panel.sz-xl .ca-qchunk .lbl { font-size: 11px; line-height: 14px; }
+.ca-panel.sz-m .ca-qchunk .v, .ca-panel.sz-l .ca-qchunk .v, .ca-panel.sz-xl .ca-qchunk .v { font-size: 14px; line-height: 20px; }
+.ca-panel.sz-m .ca-qchunk .pbar, .ca-panel.sz-l .ca-qchunk .pbar, .ca-panel.sz-xl .ca-qchunk .pbar { width: 40px; height: 8px; }
+.ca-panel.sz-m .ca-qchunk .pbar > b, .ca-panel.sz-l .ca-qchunk .pbar > b, .ca-panel.sz-xl .ca-qchunk .pbar > b { height: 12px; }
+.ca-panel.sz-m .ca-qrow, .ca-panel.sz-l .ca-qrow, .ca-panel.sz-xl .ca-qrow { gap: 16px; }
+
 /* prototype chrome */
 .proto-bar { white-space: nowrap; overflow-x: auto; position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-xxs) var(--space-s);
   background: var(--primary); border-bottom: 1px solid var(--divider); font: 400 12px/17px var(--font-sans); color: var(--on-bg-muted); }

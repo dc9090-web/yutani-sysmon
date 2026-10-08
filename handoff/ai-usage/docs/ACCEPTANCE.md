@@ -30,6 +30,15 @@ Run every check in **dark and light**, at panel sizes XS, S and M, on a horizont
 - [ ] P-05: Percent, Bars and Both, with Used and Left, and the Reset chunk, all render as in the screenshots.
 - [ ] P-06: The tooltip lists every enabled window with its % and reset, plus the state suffix.
 
+## Panel icon
+
+- [ ] I-01: The "Panel icon" setting switches between Robot, Cyborg · cyan and Cyborg · red live. The choice persists.
+- [ ] I-02: The avatars render at the non-symbolic size for each panel size (32 / 40 / 48 / 56) and look sharp at 1× and 2× scaling. At XS they fall back to the Robot.
+- [ ] I-03: The ring arc equals the session % left. Use the demo slider, or the fixtures: 42% used → 58% arc in the accent; 87% → 13% arc in warning; 100% → full destructive ring.
+- [ ] I-04: The ring ignores the Used/Left setting.
+- [ ] I-05: Stale data dims the arc to 45%. Not signed in shows the track only.
+- [ ] I-06: The tooltip and accessible name include "Session N% left" or "Session limit reached".
+
 ## Popup
 
 - [ ] U-01: Header: robot, "Claude", plan chip, email, freshness and refresh. The refresh button disables while fetching and for 10 s afterwards.

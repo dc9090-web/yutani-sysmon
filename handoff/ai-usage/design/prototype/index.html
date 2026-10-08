@@ -2,16 +2,20 @@
 <html data-theme="dark"><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="bundle.css"><script src="bundle.js"></script><meta charset="utf-8"><title>AI Usage — prototype</title>
 <style>
   .proto { display:flex; flex-direction:column; align-items:center; gap:4px; padding:16px; }
-  .topbar { width:392px; display:flex; justify-content:flex-end; }
+  .topbar { width:520px; display:flex; justify-content:flex-end; }
+  .demo { display:flex; gap:16px; align-items:center; font:400 12px/17px var(--font-sans); color:var(--on-bg-muted); margin-bottom:8px; }
+  .demo select, .demo input { font:inherit; }
   [hidden] { display:none !important; }
 </style></head>
 <body>
-<div class="proto-bar"><a href="index.html" aria-current="page">Prototype</a><a href="panel.html">Panel button</a><a href="rows.html">Quota rows</a><a href="header.html">Header</a><a href="states.html">States</a><a href="icons.html">Icon study</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
+<div class="proto-bar"><a href="index.html" aria-current="page">Prototype</a><a href="panel.html">Panel button</a><a href="icon.html">Panel icon + ring</a><a href="rows.html">Quota rows</a><a href="header.html">Header</a><a href="states.html">States</a><span class="sp"></span><button id="themeBtn" type="button">Theme: dark</button></div>
 <div class="proto">
-  <div class="topbar"><div class="ca-panel h"><button class="ca-pbtn is-open" id="pbtn" aria-label="Claude usage" aria-expanded="true"><span id="chunks" style="display:contents"></span></button></div></div>
+  <div class="demo" aria-label="Prototype controls">Prototype · panel size <select id="dSize"><option value="s">S</option><option value="m">M</option><option value="l" selected>L</option><option value="xl">XL</option></select>
+    session used <input id="dUsed" type="range" min="0" max="100" value="42"><span id="dUsedV">42%</span></div>
+  <div class="topbar"><div class="ca-panel h sz-l" id="pnl"><button class="ca-pbtn is-open" id="pbtn" aria-label="Claude usage" aria-expanded="true"><span id="chunks" style="display:contents"></span></button></div></div>
   <div class="ca-popup" id="popup">
     <section id="main">
-      <div class="ca-qhead"><span class="ca-icon i-robot ca-qicon" aria-hidden="true"></span><div class="meta"><span class="ca-heading">Claude <span class="ca-chip plan" id="plan"></span></span><span class="ca-caption" id="email"></span></div><span class="upd" id="upd"></span><button class="ca-iconbtn" id="refresh" aria-label="Refresh now"><span class="ca-icon i-refresh"></span></button></div>
+      <div class="ca-qhead"><span id="hicon" style="display:contents"></span><div class="meta"><span class="ca-heading">Claude <span class="ca-chip plan" id="plan"></span></span><span class="ca-caption" id="email"></span></div><span class="upd" id="upd"></span><button class="ca-iconbtn" id="refresh" aria-label="Refresh now"><span class="ca-icon i-refresh"></span></button></div>
       <div class="ca-sep"></div>
       <div id="rows"></div>
       <div class="ca-sep"></div>
@@ -20,6 +24,10 @@
     <section id="settings" hidden>
       <div class="ca-subhead"><button class="ca-iconbtn" id="back" aria-label="Back"><span class="ca-icon i-back"></span></button><span class="ca-heading">Applet settings</span></div>
       <div class="ca-sep full" style="margin:4px 0 8px"></div>
+      <div class="ca-pad ca-caption-heading" id="icLbl">Panel icon</div>
+      <div class="ca-pad"><div class="ca-iconpick" role="radiogroup" aria-labelledby="icLbl" id="icons"></div></div>
+      <div class="ca-pad ca-caption" id="icCap" style="padding-top:0"></div>
+      <div class="ca-sep"></div>
       <div class="ca-pad ca-caption-heading">Show in panel</div>
       <div id="toggles"></div>
       <div class="ca-sep"></div>
@@ -30,7 +38,7 @@
 <script>
   var A = window.CosmicApplets, $ = function (id) { return document.getElementById(id); };
   var q = A.quotaSim(Date.now());
-  var state = JSON.parse(JSON.stringify(A.QUOTA_DEFAULTS));
+  var state = JSON.parse(JSON.stringify(A.QUOTA_DEFAULTS)); state.icon = 'cyborg-red';
   var SEGS = [
     { k: 'style', label: 'Panel style', opts: [['percent', 'Percent'], ['bars', 'Bars'], ['both', 'Both']] },
     { k: 'amount', label: 'Show', opts: [['used', 'Used'], ['left', 'Left']] },
@@ -39,15 +47,21 @@
   ];
   function paintPanel() {
     var now = Date.now();
+    var sz = $('dSize').value; $('pnl').className = 'ca-panel h sz-' + sz;
+    state.iconSize = A.QICON[state.icon].src ? { s: 32, m: 40, l: 48, xl: 56 }[sz] : null;
     $('chunks').innerHTML = A.quotaPanelHTML(q, now, state);
     $('pbtn').title = q.windows.map(function (w) { return w.name + ' ' + Math.round(w.used) + '% used, ' + A.resetPhrase(w.resetAt, now, 'relative').toLowerCase(); }).join('; ');
   }
   function paintMain() {
     var now = Date.now();
+    $('hicon').innerHTML = A.quotaIconHTML(state.icon, q.windows[0], A.QICON[state.icon].src ? 32 : 20);
     $('plan').textContent = q.plan; $('email').textContent = q.email; $('upd').textContent = 'Updated ' + A.agoText(q.updatedAt, now);
     $('rows').innerHTML = q.windows.map(function (w) { return A.quotaRowHTML(w, now, { amount: state.amount, reset: state.reset }); }).join('');
   }
   function paintSettings() {
+    $('icons').innerHTML = A.QUOTA_ICONS.map(function (ic) { var on = state.icon === ic.id;
+      return '<button role="radio" aria-checked="' + on + '" data-i="' + ic.id + '">' + A.quotaIconHTML(ic.id, q.windows[0], ic.src ? 40 : 28) + '<span class="n">' + ic.name + '</span></button>'; }).join('');
+    $('icCap').textContent = A.QICON[state.icon].note;
     var rows = [['session', 'Session', '5-hour window'], ['weekly', 'Weekly', 'All models'], ['fable', 'Fable', 'Fable weekly limit']];
     var on = rows.filter(function (r) { return state.show[r[0]]; }).length;
     $('toggles').innerHTML = rows.map(function (r) { var last = on === 1 && state.show[r[0]];
@@ -58,6 +72,9 @@
         g.opts.map(function (o) { return '<button data-v="' + o[0] + '" aria-pressed="' + (state[g.k] === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div></div>';
     }).join('');
   }
+  $('icons').onclick = function (e) { var b = e.target.closest('[data-i]'); if (!b) return; state.icon = b.dataset.i; paintSettings(); paintPanel(); };
+  $('dSize').onchange = function () { paintPanel(); };
+  $('dUsed').oninput = function () { q.windows[0].used = +this.value; $('dUsedV').textContent = this.value + '%'; paintPanel(); if (!$('main').hidden) paintMain(); else paintSettings(); };
   $('toggles').onclick = function (e) { var b = e.target.closest('[data-w]'); if (!b || b.disabled) return; var k = b.dataset.w; if (k === 'resetInPanel') state.resetInPanel = !state.resetInPanel; else state.show[k] = !state.show[k]; paintSettings(); paintPanel(); };
   $('segs').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; state[b.parentNode.dataset.k] = b.dataset.v; paintSettings(); paintPanel(); };
   $('toSettings').onclick = function () { $('main').hidden = true; $('settings').hidden = false; paintSettings(); $('back').focus(); };

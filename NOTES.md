@@ -21,6 +21,10 @@ Ideas and known limits kept out of v1 (the handoffs say: don't add features that
 - **AI Usage clock-time text** uses English weekday/month abbreviations and AM/PM from code, not the `.ftl` file; every other string is in the `.ftl` file (a test checks every `fl!` key exists).
 - **AI Usage accessibility:** like the siblings, libcosmic is built without `a11y`, so the meters aren't exposed to AT-SPI. The tooltip carries the full summary ("Session 42% used, resets in 2h 13m; …"), and levels are always stated in words too.
 
+- **AI Usage avatars** (handoff update, 2026-10-08): the panel icon can be the Robot or a Cyborg avatar with a session ring. The PNG is picked as the smallest pre-scaled size at least the image diameter × the output scale, so it's only ever scaled down. The ring is a cached canvas that redraws only when the session %, stale flag or theme colours change. DC confirmed the rights to publish the avatar images.
+- **AI Usage panel-icon tiles** use caption-size labels: "Cyborg · cyan" wraps at body size in COSMIC's font within a third of the popup.
+- **Larger panels (M+)** step AI Usage's text and bars up (labels 11/14, values 14/20, bars 40 × 8, 16 px between chunks), per the updated DESIGN §2c.
+
 ## Ideas
 
 - Bits/s option for Network Traffic (open decision in the handoff).

@@ -21,7 +21,7 @@ This is the handoff for building a COSMIC panel applet that shows Claude subscri
 | `design/prototype/` | Interactive HTML reference. Open `index.html`; the top bar switches pages and theme. |
 | `design/screenshots/` | Target renders, dark and light, at 2× |
 | `design/icons/` | Robot icon and the cosmic-icons used (CC BY-SA 4.0) |
-| `resources/` | Desktop entry and applet icon (the robot) |
+| `resources/` | Desktop entry, applet icon (the robot), and the two avatar icons at 24–128 px (`icons/avatars/`) |
 | `i18n/en/*.ftl` | Every user-visible string |
 
 ## Caveats
