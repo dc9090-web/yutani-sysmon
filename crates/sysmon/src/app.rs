@@ -24,7 +24,7 @@ use common::ui::{self, cell, mono, space_m, space_xs, space_xxs, space_xxxs};
 
 use crate::config::{APP_ID, Config, DiskChoice, GpuChoice, PanelStyle};
 use crate::fl;
-use crate::sample::Sampler;
+use crate::sample::{Sampler, gpu};
 use crate::widgets::{Meter, Stat, meters, stats, top_row};
 
 /// Room the panel strip and the popup offset take from the output height.
@@ -337,6 +337,18 @@ impl App {
         };
         let g = &s.latest.gpu;
         let name = s.gpu_name.as_ref().map_or_else(String::new, |(_, n)| n.clone());
+        let caption = widget::text::caption(fl!("gpu-caption", name = name, driver = card.driver.as_str())).class(Ink::Muted.text());
+        let headline = Some(Self::headline(format_pct(g.busy).trim_start().to_owned()));
+        if card.vendor == gpu::Vendor::Intel {
+            // An iGPU shares system RAM and has no sensors of its own; the
+            // engine classes say what the busy figure is made of.
+            let st = vec![
+                Stat { key: fl!("clock"), value: format_ghz(g.clock_mhz), hot: false },
+                Stat { key: fl!("engine-render"), value: format_pct(g.render).trim_start().to_owned(), hot: false },
+                Stat { key: fl!("engine-video"), value: format_pct(g.video).trim_start().to_owned(), hot: false },
+            ];
+            return self.section(top_row(Ink::Purple, fl!("gpu"), caption.into(), headline), self.pct_graph(&s.gpu, Ink::Purple), vec![stats(st)]);
+        }
         let mut details = Vec::new();
         let vram = Meter {
             label: fl!("vram"),
@@ -366,16 +378,7 @@ impl App {
             st.push(Stat { key: fl!("power"), value: format_w(g.power_w), hot: false });
         }
         details.push(stats(st));
-        self.section(
-            top_row(
-                Ink::Purple,
-                fl!("gpu"),
-                widget::text::caption(fl!("gpu-caption", name = name)).class(Ink::Muted.text()).into(),
-                Some(Self::headline(format_pct(g.busy).trim_start().to_owned())),
-            ),
-            self.pct_graph(&s.gpu, Ink::Purple),
-            details,
-        )
+        self.section(top_row(Ink::Purple, fl!("gpu"), caption.into(), headline), self.pct_graph(&s.gpu, Ink::Purple), details)
     }
 
     fn section_collapsed<'a>(&self, ink: Ink, name: String, caption: String) -> Element<'a, Message> {
@@ -557,7 +560,7 @@ impl App {
                 let name = if s.gpu_name.as_ref().is_some_and(|(slot, _)| slot == &c.slot) {
                     s.gpu_name.as_ref().map(|(_, n)| n.clone()).unwrap_or_default()
                 } else {
-                    format!("AMD GPU ({:04x}:{:04x})", c.ids.0, c.ids.1)
+                    gpu::fallback_name(c)
                 };
                 gpus = gpus.push(ui::radio_row(
                     shown.as_deref() == Some(c.slot.as_str()),

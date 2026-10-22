@@ -17,4 +17,8 @@
 		1849 5403  Navi 48 XTX [Steel Legend Radeon RX 9070 XT]
 		1da2 e490  Navi 48 XTX [Sapphire Pulse Radeon RX 9070 XT]
 8086  Intel Corporation
+	3ea0  WhiskeyLake-U GT2 [UHD Graphics 620]
+	46a6  Alder Lake-P GT2 [Iris Xe Graphics]
+	5916  HD Graphics 620
+	7d55  Meteor Lake-P [Intel Arc Graphics]
 	15bf  JHL6240 Thunderbolt 3 NHI (Low Power) [Alpine Ridge LP 2016]

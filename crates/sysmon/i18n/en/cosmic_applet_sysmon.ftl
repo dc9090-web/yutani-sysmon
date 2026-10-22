@@ -18,7 +18,7 @@ gpu = GPU
 memory = Memory
 disk-io = Disk I/O
 cpu-caption = { $model } · { $cores } cores / { $threads } threads
-gpu-caption = { $name } · amdgpu
+gpu-caption = { $name } · { $driver }
 mem-caption = { $total } GiB total
 gib-used = GiB used
 all-drives = All drives
@@ -33,6 +33,8 @@ package-power = Package power
 edge = Edge
 junction = Junction
 vram = VRAM
+engine-render = Render
+engine-video = Video
 power = Power
 ram = RAM
 swap = Swap
@@ -58,7 +60,7 @@ disk = Disk
 gpu-picker = GPU
 
 # States
-gpu-unavailable = No supported GPU found · AMD (amdgpu) only
+gpu-unavailable = No supported GPU found · AMD or Intel only
 disk-missing = { $dev } not found · using All drives
 needs-permission = Needs permission
 

@@ -1,11 +1,13 @@
 //! The 1 Hz sampler: every metric's history and latest reading.
 //!
 //! Per tick it reads `/proc/stat`, `/proc/meminfo`, each drive's `stat`,
-//! the GPU busy and temperature files, Tctl and RAPL. Clocks, VRAM, GPU
+//! the GPU busy and temperature files (Intel: its clients' fdinfo), Tctl
+//! and RAPL. Clocks, VRAM, GPU
 //! power and NVMe temps are only read while the popup shows them.
 
 pub mod cpu;
 pub mod disk;
+pub mod fdinfo;
 pub mod gpu;
 pub mod hwmon;
 pub mod mem;
@@ -109,6 +111,9 @@ pub struct Sampler {
     freq: Vec<PathBuf>,
     tctl: Option<PathBuf>,
     rapl: cpu::Rapl,
+    /// Intel busy time, and the slot it was baselined for.
+    clients: fdinfo::Clients,
+    clients_slot: Option<String>,
     prev_stat: Option<(u64, u64)>,
     last_tick: Option<Instant>,
     last_discover: Option<Instant>,
@@ -196,7 +201,7 @@ impl Sampler {
 
         // GPU (with the popup open, `read_extras` reads it in full below)
         if !full {
-            self.latest.gpu = self.card().map(|c| c.read(false)).unwrap_or_default();
+            self.read_gpu(now, false);
         }
 
         // Memory
@@ -237,7 +242,7 @@ impl Sampler {
     /// popup is open, and once as it opens so it never shows stale dashes.
     pub fn read_extras(&mut self) {
         self.latest.cpu_mhz = cpu::mean_mhz(&self.freq);
-        self.latest.gpu = self.card().map(|c| c.read(true)).unwrap_or_default();
+        self.read_gpu(Instant::now(), true);
         let only = self.choice.disk.as_deref().filter(|_| !self.disk_missing);
         let hottest = self
             .drives
@@ -248,6 +253,23 @@ impl Sampler {
         self.latest.nvme_temp = hottest.map(|h| h.0);
         self.latest.nvme_max = hottest.and_then(|h| h.1);
         self.update_warnings();
+    }
+
+    fn read_gpu(&mut self, now: Instant, full: bool) {
+        let Some(card) = gpu::pick(&self.cards, self.choice.gpu.as_deref()) else {
+            self.latest.gpu = gpu::Reading::default();
+            return;
+        };
+        let mut r = card.read(full);
+        if card.vendor == gpu::Vendor::Intel && r.busy.is_none() {
+            if self.clients_slot.as_deref() != Some(card.slot.as_str()) {
+                self.clients.reset();
+                self.clients_slot = Some(card.slot.clone());
+            }
+            let b = self.clients.sample(now, &card.slot);
+            (r.busy, r.render, r.video) = (b.overall, b.render, b.video);
+        }
+        self.latest.gpu = r;
     }
 
     fn update_warnings(&mut self) {

@@ -1,4 +1,4 @@
-//! System Monitor: a COSMIC panel applet showing CPU, AMD GPU, memory and
+//! System Monitor: a COSMIC panel applet showing CPU, AMD/Intel GPU, memory and
 //! disk I/O.
 
 mod app;

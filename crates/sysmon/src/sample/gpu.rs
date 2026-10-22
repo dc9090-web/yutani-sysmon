@@ -1,4 +1,7 @@
-//! AMD GPUs (amdgpu) under `/sys/class/drm`.
+//! AMD (amdgpu) and Intel (i915, xe) GPUs under `/sys/class/drm`.
+//!
+//! Intel has no `gpu_busy_percent`; its busy time comes from DRM fdinfo
+//! (see `fdinfo`), and an iGPU has no VRAM or temperature sensors.
 
 use std::path::{Path, PathBuf};
 
@@ -11,9 +14,19 @@ const PCI_IDS: [&str; 2] = ["/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.id
 /// libdrm's table of exact product names by device and revision.
 const AMDGPU_IDS: [&str; 2] = ["/usr/share/libdrm/amdgpu.ids", "/usr/local/share/libdrm/amdgpu.ids"];
 
-/// One amdgpu card with its sensor paths resolved once.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Vendor {
+    #[default]
+    Amd,
+    Intel,
+}
+
+/// One card with its sensor paths resolved once.
 #[derive(Debug, Clone, Default)]
 pub struct Card {
+    pub vendor: Vendor,
+    /// Kernel driver: `amdgpu`, `i915` or `xe`.
+    pub driver: String,
     /// PCI slot, e.g. `0000:03:00.0`.
     pub slot: String,
     pub device: PathBuf,
@@ -29,9 +42,12 @@ pub struct Card {
     pub junction_crit: Option<u64>,
     pub power: Option<PathBuf>,
     pub power_cap: Option<PathBuf>,
+    /// Intel's actual GT frequency in MHz.
+    pub act_freq: Option<PathBuf>,
 }
 
-/// Every `cardN` whose driver is amdgpu (connector entries skipped).
+/// Every `cardN` whose driver is amdgpu, i915 or xe (connector entries
+/// skipped).
 pub fn discover(drm: &Path) -> Vec<Card> {
     let Ok(entries) = std::fs::read_dir(drm) else { return Vec::new() };
     let mut cards: Vec<Card> = entries
@@ -44,22 +60,32 @@ pub fn discover(drm: &Path) -> Vec<Card> {
         .filter_map(|e| {
             let device = e.path().join("device");
             let driver = std::fs::read_link(device.join("driver")).ok()?;
-            (driver.file_name()? == "amdgpu").then_some(device)
+            let driver = driver.file_name()?.to_str()?.to_owned();
+            matches!(driver.as_str(), "amdgpu" | "i915" | "xe").then(|| (e.path(), device, driver))
         })
-        .map(|device| card(&device))
+        .map(|(dir, device, driver)| card(&dir, &device, driver))
         .collect();
     cards.sort_by(|a, b| a.slot.cmp(&b.slot));
     cards.dedup_by(|a, b| a.slot == b.slot);
     cards
 }
 
-fn card(device: &Path) -> Card {
+fn card(dir: &Path, device: &Path, driver: String) -> Card {
     let slot = std::fs::canonicalize(device).ok().and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned())).unwrap_or_default();
     let hw = hwmon::first_in(&device.join("hwmon"));
     let label = |kind, l| hw.as_ref().and_then(|h| hwmon::input_by_label(h, kind, l));
     let junction = label("temp", "junction");
     let in_hw = |f: &str| hw.as_ref().map(|h| h.join(f)).filter(|p| p.exists());
+    let exists = |p: PathBuf| p.exists().then_some(p);
+    let act_freq = match driver.as_str() {
+        "i915" => exists(dir.join("gt_act_freq_mhz")).or_else(|| exists(dir.join("gt/gt0/rps_act_freq_mhz"))),
+        "xe" => exists(device.join("tile0/gt0/freq0/act_freq")),
+        _ => None,
+    };
     Card {
+        vendor: if driver == "amdgpu" { Vendor::Amd } else { Vendor::Intel },
+        driver,
+        act_freq,
         vram_total: read_u64(device.join("mem_info_vram_total")),
         ids: (
             read_hex(device.join("vendor")).unwrap_or(0),
@@ -89,7 +115,12 @@ pub fn pick<'a>(cards: &'a [Card], slot: Option<&str>) -> Option<&'a Card> {
 
 /// The marketing name from `pci.ids` text: the subsystem entry, else the
 /// device entry; the bracketed part when there is one.
-pub fn lookup(pci_ids: &str, (ven, dev, sv, sd): (u32, u32, u32, u32)) -> Option<String> {
+pub fn lookup(pci_ids: &str, ids: (u32, u32, u32, u32)) -> Option<String> {
+    let brand = if ids.0 == 0x8086 { "Intel" } else { "AMD" };
+    lookup_raw(pci_ids, ids).map(|n| pretty(n, brand))
+}
+
+fn lookup_raw(pci_ids: &str, (ven, dev, sv, sd): (u32, u32, u32, u32)) -> Option<&str> {
     let (ven, dev, sub) = (format!("{ven:04x}"), format!("{dev:04x}"), format!("{sv:04x} {sd:04x}"));
     let mut in_vendor = false;
     let mut device_name: Option<&str> = None;
@@ -109,7 +140,7 @@ pub fn lookup(pci_ids: &str, (ven, dev, sv, sd): (u32, u32, u32, u32)) -> Option
         }
         if let Some(rest) = line.strip_prefix("\t\t") {
             if device_name.is_some() && rest.starts_with(&sub) {
-                return Some(pretty(rest[sub.len()..].trim()));
+                return Some(rest[sub.len()..].trim());
             }
         } else if let Some(rest) = line.strip_prefix('\t') {
             if device_name.is_some() {
@@ -120,16 +151,21 @@ pub fn lookup(pci_ids: &str, (ven, dev, sv, sd): (u32, u32, u32, u32)) -> Option
             }
         }
     }
-    device_name.map(pretty)
+    device_name
 }
 
-/// `Navi 48 [Radeon RX 9070/9070 XT]` → `AMD Radeon RX 9070/9070 XT`.
-fn pretty(name: &str) -> String {
+/// `Navi 48 [Radeon RX 9070/9070 XT]` → `AMD Radeon RX 9070/9070 XT`;
+/// `Alder Lake-P GT2 [Iris Xe Graphics]` → `Intel Iris Xe Graphics`.
+fn pretty(name: &str, brand: &str) -> String {
     let inner = match (name.rfind('['), name.rfind(']')) {
         (Some(a), Some(b)) if b > a => &name[a + 1..b],
         _ => name,
     };
-    if inner.starts_with("Radeon") { format!("AMD {inner}") } else { inner.to_owned() }
+    let prefixed = match brand {
+        "AMD" => inner.starts_with("Radeon"),
+        _ => ["UHD", "Iris", "HD Graphics", "Arc", "Graphics"].iter().any(|p| inner.starts_with(p)),
+    };
+    if prefixed { format!("{brand} {inner}") } else { inner.to_owned() }
 }
 
 /// The exact name from libdrm's `amdgpu.ids` (`device,\trevision,\tname`).
@@ -144,11 +180,25 @@ pub fn lookup_amdgpu_ids(text: &str, device: u32, revision: u32) -> Option<Strin
 }
 
 /// Name for a card, read once (only for the card shown): libdrm's
-/// `amdgpu.ids`, then `pci.ids`, then the bare ids.
+/// `amdgpu.ids` (AMD), then `pci.ids`, then the bare ids.
 pub fn name(card: &Card) -> String {
-    let exact = || AMDGPU_IDS.iter().find_map(|p| std::fs::read_to_string(p).ok()).and_then(|text| lookup_amdgpu_ids(&text, card.ids.1, card.revision));
+    let exact = || {
+        (card.vendor == Vendor::Amd)
+            .then(|| AMDGPU_IDS.iter().find_map(|p| std::fs::read_to_string(p).ok()))
+            .flatten()
+            .and_then(|text| lookup_amdgpu_ids(&text, card.ids.1, card.revision))
+    };
     let family = || PCI_IDS.iter().find_map(|p| std::fs::read_to_string(p).ok()).and_then(|text| lookup(&text, card.ids));
-    exact().or_else(family).unwrap_or_else(|| format!("AMD GPU ({:04x}:{:04x})", card.ids.0, card.ids.1))
+    exact().or_else(family).unwrap_or_else(|| fallback_name(card))
+}
+
+/// `AMD GPU (1002:7550)`, for cards whose name wasn't looked up.
+pub fn fallback_name(card: &Card) -> String {
+    let brand = match card.vendor {
+        Vendor::Amd => "AMD",
+        Vendor::Intel => "Intel",
+    };
+    format!("{brand} GPU ({:04x}:{:04x})", card.ids.0, card.ids.1)
 }
 
 /// The `*` line of `pp_dpm_sclk`, in MHz.
@@ -167,6 +217,9 @@ pub struct Reading {
     pub junction: Option<f32>,
     pub power_w: Option<f32>,
     pub cap_w: Option<f32>,
+    /// Intel only, from fdinfo: the render and video engine classes.
+    pub render: Option<f32>,
+    pub video: Option<f32>,
 }
 
 impl Card {
@@ -176,7 +229,8 @@ impl Card {
         read_string(&self.runtime_status).as_deref() == Some("suspended")
     }
 
-    /// `full`: also the popup-only readings (VRAM, clock, power).
+    /// `full`: also the popup-only readings (VRAM, clock, power). Intel's
+    /// busy is left `None` for the sampler to fill in from fdinfo.
     pub fn read(&self, full: bool) -> Reading {
         if self.suspended() {
             return Reading { busy: Some(0.0), ..Default::default() };
@@ -185,9 +239,11 @@ impl Card {
         let mut r = Reading { busy: read_u64(&self.busy).map(|v| v as f32), edge: mc(&self.edge), junction: mc(&self.junction), ..Default::default() };
         if full {
             r.vram_used = read_u64(&self.vram_used);
-            r.clock_mhz = match &self.clock {
-                Some(p) => read_u64(p).map(|hz| hz as f32 / 1e6),
-                None => std::fs::read_to_string(self.device.join("pp_dpm_sclk")).ok().and_then(|t| dpm_sclk_mhz(&t)),
+            r.clock_mhz = match (&self.act_freq, &self.clock) {
+                (Some(p), _) => read_u64(p).map(|mhz| mhz as f32),
+                (None, Some(p)) => read_u64(p).map(|hz| hz as f32 / 1e6),
+                _ if self.vendor == Vendor::Amd => std::fs::read_to_string(self.device.join("pp_dpm_sclk")).ok().and_then(|t| dpm_sclk_mhz(&t)),
+                _ => None,
             };
             let w = |p: &Option<PathBuf>| p.as_ref().and_then(read_u64).map(|uw| uw as f32 / 1e6);
             r.power_w = w(&self.power);
@@ -213,6 +269,56 @@ mod tests {
         // Same device id under another vendor is not matched.
         assert_eq!(lookup(IDS, (0x1002, 0x15bf, 0, 0)).as_deref(), Some("Phoenix1"));
         assert_eq!(lookup(IDS, (0x1002, 0x9999, 0, 0)), None);
+    }
+
+    #[test]
+    fn intel_names() {
+        assert_eq!(lookup(IDS, (0x8086, 0x46a6, 0x1028, 0x0b1a)).as_deref(), Some("Intel Iris Xe Graphics"));
+        assert_eq!(lookup(IDS, (0x8086, 0x3ea0, 0, 0)).as_deref(), Some("Intel UHD Graphics 620"));
+        assert_eq!(lookup(IDS, (0x8086, 0x5916, 0, 0)).as_deref(), Some("Intel HD Graphics 620"));
+        // Already carries the brand.
+        assert_eq!(lookup(IDS, (0x8086, 0x7d55, 0, 0)).as_deref(), Some("Intel Arc Graphics"));
+        let c = Card { vendor: Vendor::Intel, ids: (0x8086, 0x9a49, 0, 0), ..Default::default() };
+        assert_eq!(fallback_name(&c), "Intel GPU (8086:9a49)");
+    }
+
+    #[test]
+    fn discovers_intel_cards() {
+        use std::os::unix::fs::symlink;
+        let root = std::env::temp_dir().join(format!("drm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dev = |name: &str, driver: &str, vendor: &str| {
+            let d = root.join("devices").join(name);
+            std::fs::create_dir_all(root.join("drivers").join(driver)).unwrap();
+            std::fs::create_dir_all(&d).unwrap();
+            symlink(root.join("drivers").join(driver), d.join("driver")).unwrap();
+            std::fs::write(d.join("vendor"), format!("{vendor}\n")).unwrap();
+            d
+        };
+        let drm = root.join("drm");
+        std::fs::create_dir_all(drm.join("card0")).unwrap();
+        std::fs::create_dir_all(drm.join("card1")).unwrap();
+        std::fs::create_dir_all(drm.join("card2")).unwrap();
+        let i915 = dev("0000:00:02.0", "i915", "0x8086");
+        let xe = dev("0000:04:00.0", "xe", "0x8086");
+        let nv = dev("0000:01:00.0", "nouveau", "0x10de");
+        symlink(&i915, drm.join("card0/device")).unwrap();
+        symlink(&xe, drm.join("card1/device")).unwrap();
+        symlink(&nv, drm.join("card2/device")).unwrap();
+        std::fs::write(drm.join("card0/gt_act_freq_mhz"), "1300\n").unwrap();
+        std::fs::create_dir_all(xe.join("tile0/gt0/freq0")).unwrap();
+        std::fs::write(xe.join("tile0/gt0/freq0/act_freq"), "2050\n").unwrap();
+
+        let cards = discover(&drm);
+        assert_eq!(cards.len(), 2);
+        assert_eq!((cards[0].slot.as_str(), cards[0].driver.as_str(), cards[0].vendor), ("0000:00:02.0", "i915", Vendor::Intel));
+        assert_eq!(cards[1].driver, "xe");
+        assert_eq!(cards[0].read(true).clock_mhz, Some(1300.0));
+        assert_eq!(cards[1].read(true).clock_mhz, Some(2050.0));
+        // No VRAM, no temperatures, and busy is the sampler's job.
+        let r = cards[0].read(true);
+        assert_eq!((r.vram_used, r.edge, r.busy), (None, None, None));
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

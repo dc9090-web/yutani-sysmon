@@ -31,7 +31,7 @@ pub enum GpuChoice {
 #[version = 1]
 pub struct Config {
     pub show_cpu: bool,
-    /// Ignored when there is no amdgpu card.
+    /// Ignored when there is no amdgpu, i915 or xe card.
     pub show_gpu: bool,
     pub show_mem: bool,
     pub show_disk: bool,

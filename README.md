@@ -7,7 +7,7 @@
 
 <br>
 
-**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
+**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD or Intel GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
 
 The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
 
@@ -16,6 +16,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 [![libcosmic](https://img.shields.io/badge/libcosmic-60ad2cc-0ea5e9)](https://github.com/pop-os/libcosmic/commit/60ad2cc4c33d7500aba557cd9150e6938d72d5a1)
 [![Wayland](https://img.shields.io/badge/Wayland-native-7c3aed)](https://wayland.freedesktop.org/)
 [![AMD](https://img.shields.io/badge/GPU-amdgpu-e11d48)](https://docs.kernel.org/gpu/amdgpu/)
+[![Intel](https://img.shields.io/badge/GPU-i915%20%7C%20xe-0071c5)](https://docs.kernel.org/gpu/drm-usage-stats.html)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-login_reused-d97757)](https://docs.anthropic.com/en/docs/claude-code)
 [![OpenWeather](https://img.shields.io/badge/OpenWeather-your_own_key-eb6e4b)](https://openweathermap.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-green)](LICENSE)
@@ -33,7 +34,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | | Applet | What it shows |
 | --- | --- | --- |
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
-| 🖥️ | **System Monitor** | CPU, AMD GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
+| 🖥️ | **System Monitor** | CPU, AMD or Intel GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
 | 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Reuses Claude Code's login, read-only. |
 | 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
@@ -50,7 +51,7 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 🎨 | **Software rendering** | Built on tiny-skia with no `wgpu`. There is no GPU context per applet, so no VRAM and no driver threads sit idle in the panel. |
 | 📂 | **Direct procfs / sysfs** | No `sysinfo`, no helper daemon. Each source is read from the kernel file the spec names, with small stack-buffer reads and no allocation per value. |
 | 🗂️ | **Paths resolved once** | hwmon labels, GPU sensors, drives and adapters are discovered at start and on a slow timer, never globbed per tick. |
-| 👁️ | **Only what's on screen** | Clocks, VRAM, GPU power and NVMe temps are read only while the popup shows them. The panel needs about 8 small reads a second. |
+| 👁️ | **Only what's on screen** | Clocks, VRAM, GPU power and NVMe temps are read only while the popup shows them. The panel needs about 8 small reads a second (on Intel, plus one per GPU client). |
 | 💤 | **Never wakes a sleeping GPU** | A runtime-suspended dGPU reads as idle without touching its sensors, so laptops stay in D3cold. |
 | 🧵 | **Single-thread executor** | One 1 Hz timer per system applet. Rates come from monotonic `Instant` deltas, never an assumed second. AI Usage sleeps until its next request and redraws its countdowns every 30 s. |
 | 🌐 | **One host, no telemetry** | AI Usage talks only to `api.anthropic.com` over rustls, caches nothing on disk, and holds the token only for the length of a request. |
@@ -120,11 +121,12 @@ Six styles, picked live in *Applet settings*. Download is always `accent_blue` a
 | | Section | Headline | Details | Source |
 | --- | --- | --- | --- | --- |
 | 🟦 | **CPU** | usage % | Clock (avg), Tctl, Package power | `/proc/stat`, `/proc/cpuinfo`, `cpufreq`, `k10temp` / `coretemp`, RAPL |
-| 🟪 | **GPU** | busy % | VRAM and Power meters; Clock, Edge, Junction | `amdgpu` sysfs and hwmon; name from libdrm `amdgpu.ids`, then `pci.ids` |
+| 🟪 | **GPU** | busy % | AMD: VRAM and Power meters; Clock, Edge, Junction. Intel: Clock, Render, Video | AMD: `amdgpu` sysfs and hwmon; name from libdrm `amdgpu.ids`, then `pci.ids`. Intel: DRM fdinfo engine time, `i915` / `xe` frequency files, `pci.ids` |
 | 🟩 | **Memory** | GiB used | RAM % and Swap meters | `/proc/meminfo` (used = total − available) |
 | ⬜ | **Disk I/O** | Read and Write rates | Read since login, Written, NVMe temp | `/sys/block/*/stat`, NVMe hwmon |
 
 - 🎮 **AMD GPUs, named properly.** Discovers every `amdgpu` card, defaults to the one with the most VRAM, and resolves the exact model from device and revision (e.g. *AMD Radeon RX 9070 XT*, not the whole family).
+- 🔷 **Intel integrated GPUs too.** `i915` and `xe` cards (e.g. *Intel Iris Xe Graphics*) have no busy-percent file, so busy % is summed from each GPU client's engine time in `/proc/<pid>/fdinfo`, the same source `gputop` and nvtop use. No root or perf access is needed, but only your own processes are counted. Busy is the busiest engine class; *Render* and *Video* (hardware decode/encode) are shown separately. An iGPU shares system RAM and has no temperature sensors of its own, so there's no VRAM meter or Edge/Junction. When both are present, the AMD card with VRAM is the default.
 - 💽 **Physical drives only.** Loop, RAM, zram, device-mapper and md devices are skipped. Pick *All drives* (the sum) or one drive by model and size.
 - 📜 **Scrolls on short screens.** Below 1000 logical px the sections scroll and *Applet settings* stays reachable.
 
