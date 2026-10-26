@@ -597,7 +597,9 @@ impl App {
     fn banner(&self) -> Option<Element<'_, Message>> {
         let sign_in = || Some((fl!("sign-in"), Message::SignIn));
         match &self.sign_in {
-            SignInFlow::Waiting(_) => return Some(banner(fl!("signin-waiting-title"), fl!("signin-waiting-body"), Some((fl!("cancel"), Message::SignInCancel)))),
+            SignInFlow::Waiting(_) => {
+                return Some(banner(fl!("signin-waiting-title"), fl!("signin-waiting-body"), Some((fl!("cancel"), Message::SignInCancel))));
+            }
             SignInFlow::Failed(e) => {
                 let body = match e {
                     SignInError::TimedOut => fl!("signin-failed-timeout"),

@@ -7,7 +7,7 @@
 
 <br>
 
-**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD or Intel GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
+**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD, Intel or NVIDIA GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
 
 The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes, with its own Claude sign-in (kept in the system keyring) or Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
 
@@ -17,6 +17,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 [![Wayland](https://img.shields.io/badge/Wayland-native-7c3aed)](https://wayland.freedesktop.org/)
 [![AMD](https://img.shields.io/badge/GPU-amdgpu-e11d48)](https://docs.kernel.org/gpu/amdgpu/)
 [![Intel](https://img.shields.io/badge/GPU-i915%20%7C%20xe-0071c5)](https://docs.kernel.org/gpu/drm-usage-stats.html)
+[![NVIDIA](https://img.shields.io/badge/GPU-NVML-76b900)](https://developer.nvidia.com/management-library-nvml)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-login_reused-d97757)](https://docs.anthropic.com/en/docs/claude-code)
 [![OpenWeather](https://img.shields.io/badge/OpenWeather-your_own_key-eb6e4b)](https://openweathermap.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-green)](LICENSE)
@@ -34,7 +35,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | | Applet | What it shows |
 | --- | --- | --- |
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
-| 🖥️ | **System Monitor** | CPU, AMD or Intel GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
+| 🖥️ | **System Monitor** | CPU, AMD, Intel or NVIDIA GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
 | 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
 | 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
@@ -121,12 +122,13 @@ Six styles, picked live in *Applet settings*. Download is always `accent_blue` a
 | | Section | Headline | Details | Source |
 | --- | --- | --- | --- | --- |
 | 🟦 | **CPU** | usage % | Clock (avg), Tctl, Package power | `/proc/stat`, `/proc/cpuinfo`, `cpufreq`, `k10temp` / `coretemp`, RAPL |
-| 🟪 | **GPU** | busy % | AMD: VRAM and Power meters; Clock, Edge, Junction. Intel: Clock, Render, Video | AMD: `amdgpu` sysfs and hwmon; name from libdrm `amdgpu.ids`, then `pci.ids`. Intel: DRM fdinfo engine time, `i915` / `xe` frequency files, `pci.ids` |
+| 🟪 | **GPU** | busy % | AMD: VRAM and Power meters; Clock, Edge, Junction. NVIDIA: VRAM and Power meters; Clock, Temp. Intel: Clock, Render, Video | AMD: `amdgpu` sysfs and hwmon; name from libdrm `amdgpu.ids`, then `pci.ids`. NVIDIA: NVML (`libnvidia-ml.so.1`), then `pci.ids`. Intel: DRM fdinfo engine time, `i915` / `xe` frequency files, `pci.ids` |
 | 🟩 | **Memory** | GiB used | RAM % and Swap meters | `/proc/meminfo` (used = total − available) |
 | ⬜ | **Disk I/O** | Read and Write rates | Read since login, Written, NVMe temp | `/sys/block/*/stat`, NVMe hwmon |
 
 - 🎮 **AMD GPUs, named properly.** Discovers every `amdgpu` card, defaults to the one with the most VRAM, and resolves the exact model from device and revision (e.g. *AMD Radeon RX 9070 XT*, not the whole family).
 - 🔷 **Intel integrated GPUs too.** `i915` and `xe` cards (e.g. *Intel Iris Xe Graphics*) have no busy-percent file, so busy % is summed from each GPU client's engine time in `/proc/<pid>/fdinfo`, the same source `gputop` and nvtop use. No root or perf access is needed, but only your own processes are counted. Busy is the busiest engine class; *Render* and *Video* (hardware decode/encode) are shown separately. An iGPU shares system RAM and has no temperature sensors of its own, so there's no VRAM meter or Edge/Junction. When both are present, the AMD card with VRAM is the default.
+- 🟢 **NVIDIA GPUs with the proprietary driver.** Its sysfs has no busy, VRAM or sensor files, so readings come from NVML (`libnvidia-ml.so.1`, installed with the driver), opened at run time only when an NVIDIA card is present: busy %, VRAM, core temperature (*Temp*; NVML has no hotspot), graphics clock, and power against the enforced limit. A laptop dGPU that's runtime-suspended shows as idle and is never woken: NVML isn't touched until the card is awake. The name comes from NVML (e.g. *NVIDIA GeForce RTX 4070*), else `pci.ids`. `nouveau` isn't supported. NVML reports VRAM size only once read, so with an AMD card as well, pick the NVIDIA one in *Applet settings → GPU* if it isn't the default.
 - 💽 **Physical drives only.** Loop, RAM, zram, device-mapper and md devices are skipped. Pick *All drives* (the sum) or one drive by model and size.
 - 📜 **Scrolls on short screens.** Below 1000 logical px the sections scroll and *Applet settings* stays reachable.
 
@@ -253,7 +255,7 @@ just build
 sudo just install           # → /usr/local
 ```
 
-Then add **Network Traffic**, **System Monitor**, **AI Usage**, **Weather** and/or **VPN** in *Settings → Desktop → Panel → Applets*.
+Then add **Yutani Network Traffic**, **Yutani System Monitor**, **Yutani AI Usage**, **Yutani Weather** and/or **Yutani VPN** in *Settings → Desktop → Panel → Applets* (search for *Yutani* to list them all).
 
 <details>
 <summary>Installing without root</summary>

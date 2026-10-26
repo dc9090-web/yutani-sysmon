@@ -16,6 +16,11 @@
 		148c 2435  Radeon RX 9070 XT 16GB
 		1849 5403  Navi 48 XTX [Steel Legend Radeon RX 9070 XT]
 		1da2 e490  Navi 48 XTX [Sapphire Pulse Radeon RX 9070 XT]
+10de  NVIDIA Corporation
+	1c82  GP107 [GeForce GTX 1050 Ti]
+	1eb8  TU104GL [Tesla T4]
+	2786  AD104 [GeForce RTX 4070]
+		1043 8902  AD104 [TUF Gaming GeForce RTX 4070]
 8086  Intel Corporation
 	3ea0  WhiskeyLake-U GT2 [UHD Graphics 620]
 	46a6  Alder Lake-P GT2 [Iris Xe Graphics]

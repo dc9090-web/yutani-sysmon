@@ -32,6 +32,7 @@ tctl = Tctl
 package-power = Package power
 edge = Edge
 junction = Junction
+gpu-temp = Temp
 vram = VRAM
 engine-render = Render
 engine-video = Video
@@ -60,7 +61,7 @@ disk = Disk
 gpu-picker = GPU
 
 # States
-gpu-unavailable = No supported GPU found · AMD or Intel only
+gpu-unavailable = No supported GPU found · AMD, Intel or NVIDIA
 disk-missing = { $dev } not found · using All drives
 needs-permission = Needs permission
 

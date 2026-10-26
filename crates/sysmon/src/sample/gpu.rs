@@ -1,7 +1,10 @@
-//! AMD (amdgpu) and Intel (i915, xe) GPUs under `/sys/class/drm`.
+//! AMD (amdgpu), Intel (i915, xe) and NVIDIA (nvidia) GPUs under
+//! `/sys/class/drm`.
 //!
 //! Intel has no `gpu_busy_percent`; its busy time comes from DRM fdinfo
 //! (see `fdinfo`), and an iGPU has no VRAM or temperature sensors.
+//! NVIDIA's proprietary driver exposes none of these in sysfs; its
+//! readings come from NVML (see `nvml`).
 
 use std::path::{Path, PathBuf};
 
@@ -19,13 +22,14 @@ pub enum Vendor {
     #[default]
     Amd,
     Intel,
+    Nvidia,
 }
 
 /// One card with its sensor paths resolved once.
 #[derive(Debug, Clone, Default)]
 pub struct Card {
     pub vendor: Vendor,
-    /// Kernel driver: `amdgpu`, `i915` or `xe`.
+    /// Kernel driver: `amdgpu`, `i915`, `xe` or `nvidia`.
     pub driver: String,
     /// PCI slot, e.g. `0000:03:00.0`.
     pub slot: String,
@@ -46,8 +50,8 @@ pub struct Card {
     pub act_freq: Option<PathBuf>,
 }
 
-/// Every `cardN` whose driver is amdgpu, i915 or xe (connector entries
-/// skipped).
+/// Every `cardN` whose driver is amdgpu, i915, xe or nvidia (connector
+/// entries skipped).
 pub fn discover(drm: &Path) -> Vec<Card> {
     let Ok(entries) = std::fs::read_dir(drm) else { return Vec::new() };
     let mut cards: Vec<Card> = entries
@@ -61,7 +65,7 @@ pub fn discover(drm: &Path) -> Vec<Card> {
             let device = e.path().join("device");
             let driver = std::fs::read_link(device.join("driver")).ok()?;
             let driver = driver.file_name()?.to_str()?.to_owned();
-            matches!(driver.as_str(), "amdgpu" | "i915" | "xe").then(|| (e.path(), device, driver))
+            matches!(driver.as_str(), "amdgpu" | "i915" | "xe" | "nvidia").then(|| (e.path(), device, driver))
         })
         .map(|(dir, device, driver)| card(&dir, &device, driver))
         .collect();
@@ -83,7 +87,11 @@ fn card(dir: &Path, device: &Path, driver: String) -> Card {
         _ => None,
     };
     Card {
-        vendor: if driver == "amdgpu" { Vendor::Amd } else { Vendor::Intel },
+        vendor: match driver.as_str() {
+            "amdgpu" => Vendor::Amd,
+            "nvidia" => Vendor::Nvidia,
+            _ => Vendor::Intel,
+        },
         driver,
         act_freq,
         vram_total: read_u64(device.join("mem_info_vram_total")),
@@ -116,7 +124,11 @@ pub fn pick<'a>(cards: &'a [Card], slot: Option<&str>) -> Option<&'a Card> {
 /// The marketing name from `pci.ids` text: the subsystem entry, else the
 /// device entry; the bracketed part when there is one.
 pub fn lookup(pci_ids: &str, ids: (u32, u32, u32, u32)) -> Option<String> {
-    let brand = if ids.0 == 0x8086 { "Intel" } else { "AMD" };
+    let brand = match ids.0 {
+        0x8086 => "Intel",
+        0x10de => "NVIDIA",
+        _ => "AMD",
+    };
     lookup_raw(pci_ids, ids).map(|n| pretty(n, brand))
 }
 
@@ -155,7 +167,8 @@ fn lookup_raw(pci_ids: &str, (ven, dev, sv, sd): (u32, u32, u32, u32)) -> Option
 }
 
 /// `Navi 48 [Radeon RX 9070/9070 XT]` → `AMD Radeon RX 9070/9070 XT`;
-/// `Alder Lake-P GT2 [Iris Xe Graphics]` → `Intel Iris Xe Graphics`.
+/// `Alder Lake-P GT2 [Iris Xe Graphics]` → `Intel Iris Xe Graphics`;
+/// `AD104 [GeForce RTX 4070]` → `NVIDIA GeForce RTX 4070`.
 fn pretty(name: &str, brand: &str) -> String {
     let inner = match (name.rfind('['), name.rfind(']')) {
         (Some(a), Some(b)) if b > a => &name[a + 1..b],
@@ -163,6 +176,7 @@ fn pretty(name: &str, brand: &str) -> String {
     };
     let prefixed = match brand {
         "AMD" => inner.starts_with("Radeon"),
+        "NVIDIA" => ["GeForce", "Quadro", "RTX", "TITAN", "Tesla"].iter().any(|p| inner.starts_with(p)),
         _ => ["UHD", "Iris", "HD Graphics", "Arc", "Graphics"].iter().any(|p| inner.starts_with(p)),
     };
     if prefixed { format!("{brand} {inner}") } else { inner.to_owned() }
@@ -180,13 +194,13 @@ pub fn lookup_amdgpu_ids(text: &str, device: u32, revision: u32) -> Option<Strin
 }
 
 /// Name for a card, read once (only for the card shown): libdrm's
-/// `amdgpu.ids` (AMD), then `pci.ids`, then the bare ids.
+/// `amdgpu.ids` (AMD) or NVML (NVIDIA, unless the card is asleep), then
+/// `pci.ids`, then the bare ids.
 pub fn name(card: &Card) -> String {
-    let exact = || {
-        (card.vendor == Vendor::Amd)
-            .then(|| AMDGPU_IDS.iter().find_map(|p| std::fs::read_to_string(p).ok()))
-            .flatten()
-            .and_then(|text| lookup_amdgpu_ids(&text, card.ids.1, card.revision))
+    let exact = || match card.vendor {
+        Vendor::Amd => AMDGPU_IDS.iter().find_map(|p| std::fs::read_to_string(p).ok()).and_then(|text| lookup_amdgpu_ids(&text, card.ids.1, card.revision)),
+        Vendor::Nvidia if !card.suspended() => super::nvml::name(&card.slot),
+        _ => None,
     };
     let family = || PCI_IDS.iter().find_map(|p| std::fs::read_to_string(p).ok()).and_then(|text| lookup(&text, card.ids));
     exact().or_else(family).unwrap_or_else(|| fallback_name(card))
@@ -197,6 +211,7 @@ pub fn fallback_name(card: &Card) -> String {
     let brand = match card.vendor {
         Vendor::Amd => "AMD",
         Vendor::Intel => "Intel",
+        Vendor::Nvidia => "NVIDIA",
     };
     format!("{brand} GPU ({:04x}:{:04x})", card.ids.0, card.ids.1)
 }
@@ -217,6 +232,8 @@ pub struct Reading {
     pub junction: Option<f32>,
     pub power_w: Option<f32>,
     pub cap_w: Option<f32>,
+    /// NVIDIA only: VRAM size, which its sysfs doesn't have.
+    pub vram_total: Option<u64>,
     /// Intel only, from fdinfo: the render and video engine classes.
     pub render: Option<f32>,
     pub video: Option<f32>,
@@ -234,6 +251,19 @@ impl Card {
     pub fn read(&self, full: bool) -> Reading {
         if self.suspended() {
             return Reading { busy: Some(0.0), ..Default::default() };
+        }
+        if self.vendor == Vendor::Nvidia {
+            let n = super::nvml::read(&self.slot, full);
+            return Reading {
+                busy: n.busy,
+                edge: n.temp,
+                vram_used: n.vram_used,
+                vram_total: n.vram_total,
+                clock_mhz: n.clock_mhz,
+                power_w: n.power_w,
+                cap_w: n.cap_w,
+                ..Default::default()
+            };
         }
         let mc = |p: &Option<PathBuf>| p.as_ref().and_then(read_u64).map(|v| v as f32 / 1000.0);
         let mut r = Reading { busy: read_u64(&self.busy).map(|v| v as f32), edge: mc(&self.edge), junction: mc(&self.junction), ..Default::default() };
@@ -283,7 +313,17 @@ mod tests {
     }
 
     #[test]
-    fn discovers_intel_cards() {
+    fn nvidia_names() {
+        assert_eq!(lookup(IDS, (0x10de, 0x2786, 0x10de, 0x1234)).as_deref(), Some("NVIDIA GeForce RTX 4070"));
+        assert_eq!(lookup(IDS, (0x10de, 0x2786, 0x1043, 0x8902)).as_deref(), Some("TUF Gaming GeForce RTX 4070"));
+        assert_eq!(lookup(IDS, (0x10de, 0x1c82, 0, 0)).as_deref(), Some("NVIDIA GeForce GTX 1050 Ti"));
+        assert_eq!(lookup(IDS, (0x10de, 0x1eb8, 0, 0)).as_deref(), Some("NVIDIA Tesla T4"));
+        let c = Card { vendor: Vendor::Nvidia, ids: (0x10de, 0x2786, 0, 0), ..Default::default() };
+        assert_eq!(fallback_name(&c), "NVIDIA GPU (10de:2786)");
+    }
+
+    #[test]
+    fn discovers_intel_and_nvidia_cards() {
         use std::os::unix::fs::symlink;
         let root = std::env::temp_dir().join(format!("drm-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -299,22 +339,31 @@ mod tests {
         std::fs::create_dir_all(drm.join("card0")).unwrap();
         std::fs::create_dir_all(drm.join("card1")).unwrap();
         std::fs::create_dir_all(drm.join("card2")).unwrap();
+        std::fs::create_dir_all(drm.join("card3")).unwrap();
         let i915 = dev("0000:00:02.0", "i915", "0x8086");
         let xe = dev("0000:04:00.0", "xe", "0x8086");
         let nv = dev("0000:01:00.0", "nouveau", "0x10de");
         symlink(&i915, drm.join("card0/device")).unwrap();
         symlink(&xe, drm.join("card1/device")).unwrap();
         symlink(&nv, drm.join("card2/device")).unwrap();
+        let prop = dev("0000:02:00.0", "nvidia", "0x10de");
+        std::fs::create_dir_all(prop.join("power")).unwrap();
+        std::fs::write(prop.join("power/runtime_status"), "suspended\n").unwrap();
+        symlink(&prop, drm.join("card3/device")).unwrap();
         std::fs::write(drm.join("card0/gt_act_freq_mhz"), "1300\n").unwrap();
         std::fs::create_dir_all(xe.join("tile0/gt0/freq0")).unwrap();
         std::fs::write(xe.join("tile0/gt0/freq0/act_freq"), "2050\n").unwrap();
 
         let cards = discover(&drm);
-        assert_eq!(cards.len(), 2);
+        // nouveau isn't supported; the proprietary driver is.
+        assert_eq!(cards.len(), 3);
         assert_eq!((cards[0].slot.as_str(), cards[0].driver.as_str(), cards[0].vendor), ("0000:00:02.0", "i915", Vendor::Intel));
-        assert_eq!(cards[1].driver, "xe");
+        assert_eq!((cards[1].slot.as_str(), cards[1].vendor), ("0000:02:00.0", Vendor::Nvidia));
+        assert_eq!(cards[2].driver, "xe");
         assert_eq!(cards[0].read(true).clock_mhz, Some(1300.0));
-        assert_eq!(cards[1].read(true).clock_mhz, Some(2050.0));
+        assert_eq!(cards[2].read(true).clock_mhz, Some(2050.0));
+        // A sleeping NVIDIA card reads as idle without loading NVML.
+        assert_eq!(cards[1].read(true), Reading { busy: Some(0.0), ..Default::default() });
         // No VRAM, no temperatures, and busy is the sampler's job.
         let r = cards[0].read(true);
         assert_eq!((r.vram_used, r.edge, r.busy), (None, None, None));

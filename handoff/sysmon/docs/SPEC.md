@@ -10,7 +10,7 @@ A COSMIC panel applet that shows **CPU**, **GPU (AMD / amdgpu only)**, **Memory*
 - **Popup:** a detail section per metric, with temperatures, clocks and power.
 
 **Out of scope for v1:**
-- NVIDIA or Intel GPUs
+- ~~NVIDIA or Intel GPUs~~ (Intel added with `i915` / `xe`; NVIDIA added 2026-10-26 through NVML, proprietary driver only)
 - Per-core CPU grid
 - Per-process lists
 - Disk space

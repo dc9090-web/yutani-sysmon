@@ -11,6 +11,7 @@ pub mod fdinfo;
 pub mod gpu;
 pub mod hwmon;
 pub mod mem;
+pub mod nvml;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -285,7 +286,7 @@ impl Sampler {
             self.warn.nvme.update(l.nvme_temp, max);
         }
         self.warn.ram.update(l.mem.and_then(|m| m.ram_pct()), 90.0);
-        let vram = l.gpu.vram_used.zip(self.card().and_then(|c| c.vram_total)).map(|(u, t)| (u as f64 / t as f64 * 100.0) as f32);
+        let vram = l.gpu.vram_used.zip(l.gpu.vram_total.or_else(|| self.card().and_then(|c| c.vram_total))).map(|(u, t)| (u as f64 / t as f64 * 100.0) as f32);
         if vram.is_some() {
             self.warn.vram.update(vram, 95.0);
         }

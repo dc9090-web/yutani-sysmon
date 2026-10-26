@@ -350,10 +350,11 @@ impl App {
             return self.section(top_row(Ink::Purple, fl!("gpu"), caption.into(), headline), self.pct_graph(&s.gpu, Ink::Purple), vec![stats(st)]);
         }
         let mut details = Vec::new();
+        let vram_total = g.vram_total.or(card.vram_total);
         let vram = Meter {
             label: fl!("vram"),
-            value: format!("{} / {} GiB", format_gib(g.vram_used), format_gib(card.vram_total)),
-            frac: g.vram_used.zip(card.vram_total).map(|(u, t)| u as f32 / t as f32),
+            value: format!("{} / {} GiB", format_gib(g.vram_used), format_gib(vram_total)),
+            frac: g.vram_used.zip(vram_total).map(|(u, t)| u as f32 / t as f32),
             ink: if s.warn.vram.0 { Ink::Warning } else { Ink::Purple },
         };
         let mut row = vec![vram];
@@ -368,11 +369,14 @@ impl App {
         }
         details.push(meters(row));
         let (jh, eh) = (s.warn.gpu_junction.0, s.warn.gpu_edge.0);
-        let mut st = vec![
-            Stat { key: fl!("clock"), value: format_ghz(g.clock_mhz), hot: false },
-            Stat { key: Self::hot_key(fl!("edge"), eh), value: format_temp(g.edge), hot: eh },
-            Stat { key: Self::hot_key(fl!("junction"), jh), value: format_temp(g.junction), hot: jh },
-        ];
+        let mut st = vec![Stat { key: fl!("clock"), value: format_ghz(g.clock_mhz), hot: false }];
+        if card.vendor == gpu::Vendor::Nvidia {
+            // NVML reports one core temperature, no hotspot.
+            st.push(Stat { key: Self::hot_key(fl!("gpu-temp"), eh), value: format_temp(g.edge), hot: eh });
+        } else {
+            st.push(Stat { key: Self::hot_key(fl!("edge"), eh), value: format_temp(g.edge), hot: eh });
+            st.push(Stat { key: Self::hot_key(fl!("junction"), jh), value: format_temp(g.junction), hot: jh });
+        }
         if g.cap_w.is_none() {
             // No power cap: no meter, the watts show as a stat.
             st.push(Stat { key: fl!("power"), value: format_w(g.power_w), hot: false });

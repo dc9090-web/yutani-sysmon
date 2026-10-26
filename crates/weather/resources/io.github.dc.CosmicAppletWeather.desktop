@@ -1,11 +1,11 @@
 [Desktop Entry]
-Name=Weather
+Name=Yutani Weather
 Comment=Current conditions, 24-hour and 7-day forecast for your cities
 Type=Application
 Exec=cosmic-applet-weather
 Terminal=false
 Categories=COSMIC;
-Keywords=COSMIC;Applet;Weather;Forecast;Temperature;Rain;
+Keywords=COSMIC;Applet;Yutani;Weather;Forecast;Temperature;Rain;
 Icon=weather-few-clouds-symbolic
 StartupNotify=true
 NoDisplay=true
