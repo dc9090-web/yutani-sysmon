@@ -1,0 +1,58 @@
+# Push a tag like v0.1.0 to build every applet on Ubuntu 24.04 (so the
+# binaries run on Pop!_OS / Ubuntu 24.04 and anything newer) and publish
+# .deb, .rpm and Arch packages to a GitHub release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)build, e.g. v0.1.0
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  NFPM_VERSION: 2.48.0
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Install nfpm
+        run: |
+          curl -sSfL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" | tar xz -C /usr/local/bin nfpm
+
+      - name: Package
+        run: packaging/build.sh "${TAG#v}"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "Yutani applets $TAG" --notes-file packaging/RELEASE_NOTES.md
+          fi

@@ -1,0 +1,26 @@
+# nfpm config: packaging/build.sh turns this into .deb, .rpm and Arch packages.
+name: yutani-weather
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: dc9090-web <noreply@github.com>
+homepage: https://github.com/dc9090-web/yutani-sysmon
+license: GPL-3.0-or-later
+description: |
+  Yutani Weather: COSMIC panel applet with current conditions, 24-hour and 7-day forecasts (your own OpenWeather key).
+depends:
+  - libxkbcommon
+archlinux:
+  packager: dc9090-web <noreply@github.com>
+overrides:
+  deb:
+    depends:
+      - libxkbcommon0
+contents:
+  - src: target/release/cosmic-applet-weather
+    dst: /usr/bin/cosmic-applet-weather
+    file_info: { mode: 0755 }
+  - src: crates/weather/resources/io.github.dc.CosmicAppletWeather.desktop
+    dst: /usr/share/applications/io.github.dc.CosmicAppletWeather.desktop

@@ -1,0 +1,28 @@
+# nfpm config: packaging/build.sh turns this into .deb, .rpm and Arch packages.
+name: yutani-sysmon
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: dc9090-web <noreply@github.com>
+homepage: https://github.com/dc9090-web/yutani-sysmon
+license: GPL-3.0-or-later
+description: |
+  Yutani System Monitor: COSMIC panel applet with CPU, AMD, Intel or NVIDIA GPU, memory and disk I/O.
+depends:
+  - libxkbcommon
+archlinux:
+  packager: dc9090-web <noreply@github.com>
+overrides:
+  deb:
+    depends:
+      - libxkbcommon0
+contents:
+  - src: target/release/cosmic-applet-sysmon
+    dst: /usr/bin/cosmic-applet-sysmon
+    file_info: { mode: 0755 }
+  - src: crates/sysmon/resources/io.github.dc.CosmicAppletSysMon.desktop
+    dst: /usr/share/applications/io.github.dc.CosmicAppletSysMon.desktop
+  - src: crates/sysmon/resources/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletSysMon-symbolic.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletSysMon-symbolic.svg

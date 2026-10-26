@@ -246,6 +246,29 @@ and import both configs from the applet's settings. Importing the torrent config
 
 ## 📦 Install
 
+### Packages
+
+Every [release](https://github.com/dc9090-web/yutani-sysmon/releases/latest) has a `.deb`, `.rpm` and Arch package per applet (x86_64, built on Ubuntu 24.04, so they run on Pop!_OS 24.04 and anything newer):
+
+```sh
+sudo apt install ./yutani-sysmon_*_amd64.deb                # Pop!_OS, Ubuntu, Debian
+sudo dnf install ./yutani-sysmon-*.x86_64.rpm               # Fedora
+sudo pacman -U yutani-sysmon-*-x86_64.pkg.tar.zst           # Arch, CachyOS, Manjaro
+```
+
+Swap `sysmon` for `net-traffic`, `ai-usage`, `weather` or `vpn`. `yutani-vpn` includes the root helper and its D-Bus, systemd and polkit files, so `just vpn-helper-install` isn't needed. Releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed; `packaging/build.sh <version>` builds the same packages locally (needs [nfpm](https://nfpm.goreleaser.com/)).
+
+**Arch from source:** `packaging/arch/PKGBUILD` builds all five from the release's source with your own compiler flags (CachyOS's included) as a split package, so `makepkg` produces one `.pkg.tar.zst` per applet and you install only the ones you want:
+
+```sh
+git clone https://github.com/dc9090-web/yutani-sysmon
+cd yutani-sysmon/packaging/arch
+makepkg -s
+sudo pacman -U yutani-sysmon-*.pkg.tar.zst
+```
+
+### From source
+
 Needs Rust (edition 2024) and the usual COSMIC build dependencies (`libxkbcommon`, `wayland`, `pkg-config`).
 
 ```sh

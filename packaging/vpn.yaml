@@ -1,0 +1,50 @@
+# nfpm config: packaging/build.sh turns this into .deb, .rpm and Arch packages.
+name: yutani-vpn
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: dc9090-web <noreply@github.com>
+homepage: https://github.com/dc9090-web/yutani-sysmon
+license: GPL-3.0-or-later
+description: |
+  Yutani VPN: COSMIC panel applet for ProtonVPN WireGuard, with a torrent-only tunnel (kill switch, port forwarding) and a NetworkManager web tunnel. Includes its D-Bus-activated root helper.
+depends:
+  - libxkbcommon
+archlinux:
+  packager: dc9090-web <noreply@github.com>
+overrides:
+  deb:
+    depends:
+      - libxkbcommon0
+contents:
+  - src: target/release/cosmic-applet-vpn
+    dst: /usr/bin/cosmic-applet-vpn
+    file_info: { mode: 0755 }
+  - src: crates/vpn/resources/io.github.dc.CosmicAppletVpn.desktop
+    dst: /usr/share/applications/io.github.dc.CosmicAppletVpn.desktop
+  - src: crates/vpn/resources/icons/vpn-reticle-off-symbolic.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/vpn-reticle-off-symbolic.svg
+  - src: crates/vpn/resources/icons/vpn-reticle-p2p-symbolic.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/vpn-reticle-p2p-symbolic.svg
+  - src: crates/vpn/resources/icons/vpn-reticle-web-symbolic.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/vpn-reticle-web-symbolic.svg
+  - src: crates/vpn/resources/icons/vpn-reticle-both-symbolic.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/vpn-reticle-both-symbolic.svg
+  # The root helper and its D-Bus, systemd and polkit files.
+  - src: target/release/cosmic-vpn-helper
+    dst: /usr/lib/cosmic-vpn-helper/cosmic-vpn-helper
+    file_info: { mode: 0755 }
+  - src: crates/vpn-helper/resources/system/io.github.dc.CosmicVpnHelper.conf
+    dst: /usr/share/dbus-1/system.d/io.github.dc.CosmicVpnHelper.conf
+  - src: crates/vpn-helper/resources/system/io.github.dc.CosmicVpnHelper.service
+    dst: /usr/share/dbus-1/system-services/io.github.dc.CosmicVpnHelper.service
+  - src: crates/vpn-helper/resources/system/cosmic-vpn-helper.service
+    dst: /usr/lib/systemd/system/cosmic-vpn-helper.service
+  - src: crates/vpn-helper/resources/system/io.github.dc.cosmicvpn.policy
+    dst: /usr/share/polkit-1/actions/io.github.dc.cosmicvpn.policy
+scripts:
+  postinstall: packaging/scripts/vpn-postinstall.sh
+  preremove: packaging/scripts/vpn-preremove.sh
+  postremove: packaging/scripts/vpn-postremove.sh

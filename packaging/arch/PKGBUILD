@@ -1,0 +1,94 @@
+# Maintainer: dc9090-web <noreply@github.com>
+#
+# Builds all five Yutani COSMIC applets from source as a split package;
+# install only the ones you want. The prebuilt equivalents are on the
+# GitHub releases page.
+
+pkgbase=yutani-applets
+pkgname=(yutani-net-traffic yutani-sysmon yutani-ai-usage yutani-weather yutani-vpn)
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Yutani COSMIC panel applets'
+arch=(x86_64)
+url='https://github.com/dc9090-web/yutani-sysmon'
+license=(GPL-3.0-or-later)
+depends=(libxkbcommon gcc-libs glibc)
+makedepends=(cargo git pkgconf wayland)
+options=(!lto)
+source=("$pkgbase-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_src() { echo "$srcdir/yutani-sysmon-$pkgver"; }
+
+prepare() {
+  cd "$(_src)"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$(_src)"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release --workspace
+}
+
+check() {
+  cd "$(_src)"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --workspace
+}
+
+_icon() { install -Dm0644 "$1" "$pkgdir/usr/share/icons/hicolor/scalable/$2/$(basename "$1")"; }
+
+package_yutani-net-traffic() {
+  pkgdesc='Yutani Network Traffic: live download and upload rates for one adapter (COSMIC applet)'
+  cd "$(_src)"
+  install -Dm0755 target/release/cosmic-applet-net-traffic -t "$pkgdir/usr/bin"
+  install -Dm0644 crates/net-traffic/resources/io.github.dc.CosmicAppletNetTraffic.desktop -t "$pkgdir/usr/share/applications"
+  _icon crates/net-traffic/resources/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletNetTraffic-symbolic.svg apps
+  _icon crates/net-traffic/resources/icons/hicolor/scalable/actions/net-down-bar-symbolic.svg actions
+  _icon crates/net-traffic/resources/icons/hicolor/scalable/actions/net-up-bar-symbolic.svg actions
+}
+
+package_yutani-sysmon() {
+  pkgdesc='Yutani System Monitor: CPU, AMD, Intel or NVIDIA GPU, memory and disk I/O (COSMIC applet)'
+  optdepends=('nvidia-utils: NVIDIA GPU readings (NVML)')
+  cd "$(_src)"
+  install -Dm0755 target/release/cosmic-applet-sysmon -t "$pkgdir/usr/bin"
+  install -Dm0644 crates/sysmon/resources/io.github.dc.CosmicAppletSysMon.desktop -t "$pkgdir/usr/share/applications"
+  _icon crates/sysmon/resources/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletSysMon-symbolic.svg apps
+}
+
+package_yutani-ai-usage() {
+  pkgdesc='Yutani AI Usage: Claude session, weekly and Fable usage limits (COSMIC applet)'
+  optdepends=('gnome-keyring: stores the applet'"'"'s own Claude sign-in (any Secret Service provider works)')
+  cd "$(_src)"
+  install -Dm0755 target/release/cosmic-applet-ai-usage -t "$pkgdir/usr/bin"
+  install -Dm0644 crates/ai-usage/resources/io.github.dc.CosmicAppletAiUsage.desktop -t "$pkgdir/usr/share/applications"
+  _icon crates/ai-usage/resources/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletAiUsage-symbolic.svg apps
+}
+
+package_yutani-weather() {
+  pkgdesc='Yutani Weather: conditions and forecasts for your cities, with your own OpenWeather key (COSMIC applet)'
+  cd "$(_src)"
+  install -Dm0755 target/release/cosmic-applet-weather -t "$pkgdir/usr/bin"
+  install -Dm0644 crates/weather/resources/io.github.dc.CosmicAppletWeather.desktop -t "$pkgdir/usr/share/applications"
+}
+
+package_yutani-vpn() {
+  pkgdesc='Yutani VPN: ProtonVPN WireGuard with a torrent-only tunnel and a web tunnel (COSMIC applet and root helper)'
+  depends+=(polkit networkmanager)
+  optdepends=('qbittorrent: the torrent tunnel launches it')
+  install=yutani-vpn.install
+  cd "$(_src)"
+  local sys=crates/vpn-helper/resources/system
+  install -Dm0755 target/release/cosmic-applet-vpn -t "$pkgdir/usr/bin"
+  install -Dm0644 crates/vpn/resources/io.github.dc.CosmicAppletVpn.desktop -t "$pkgdir/usr/share/applications"
+  for i in off p2p web both; do _icon "crates/vpn/resources/icons/vpn-reticle-$i-symbolic.svg" apps; done
+  install -Dm0755 target/release/cosmic-vpn-helper -t "$pkgdir/usr/lib/cosmic-vpn-helper"
+  install -Dm0644 "$sys/io.github.dc.CosmicVpnHelper.conf" -t "$pkgdir/usr/share/dbus-1/system.d"
+  install -Dm0644 "$sys/io.github.dc.CosmicVpnHelper.service" -t "$pkgdir/usr/share/dbus-1/system-services"
+  install -Dm0644 "$sys/cosmic-vpn-helper.service" -t "$pkgdir/usr/lib/systemd/system"
+  install -Dm0644 "$sys/io.github.dc.cosmicvpn.policy" -t "$pkgdir/usr/share/polkit-1/actions"
+}

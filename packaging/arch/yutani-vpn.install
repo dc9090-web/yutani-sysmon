@@ -1,0 +1,28 @@
+_reload() {
+  systemctl daemon-reload 2>/dev/null || true
+  systemctl reload dbus 2>/dev/null || busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig 2>/dev/null || true
+}
+
+post_install() {
+  _reload
+}
+
+post_upgrade() {
+  _reload
+  # A running helper picks up the new binary.
+  systemctl try-restart cosmic-vpn-helper.service 2>/dev/null || true
+}
+
+pre_remove() {
+  systemctl stop cosmic-vpn-helper.service 2>/dev/null || true
+  # The torrent namespace and its routing rules, if a tunnel was left up.
+  ip netns del vpn-p2p 2>/dev/null || true
+  while ip rule del fwmark 0xca6c priority 100 2>/dev/null; do :; done
+  while ip -6 rule del fwmark 0xca6c priority 100 2>/dev/null; do :; done
+  rm -rf /etc/netns/vpn-p2p
+}
+
+post_remove() {
+  # /etc/cosmic-vpn (the torrent conf) is kept.
+  _reload
+}
