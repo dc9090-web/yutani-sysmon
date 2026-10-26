@@ -950,7 +950,11 @@ impl App {
             .push(applet::padded_control(Column::new().spacing(space_xxs()).push(widget::text::body(fl!("set-icon-style"))).push(
                 widget::segmented_control::horizontal(&self.icon_model).button_padding([space_xxxs(), 0, space_xxxs(), 0]).on_activate(Message::IconStyle),
             )))
-            .push(help(if self.config.icon_style == IconStyle::Neon { fl!("icon-neon-cap") } else { fl!("icon-mono-cap") }))
+            .push(help(match self.config.icon_style {
+                IconStyle::Mono => fl!("icon-mono-cap"),
+                IconStyle::Neon => fl!("icon-neon-cap"),
+                IconStyle::Auto => fl!("icon-auto-cap"),
+            }))
             .push(ui::inset_divider())
             .push(ui::group_label(fl!("sec-startup")))
             .push(self.toggle_row(Toggle::Restore, fl!("set-restore"), fl!("set-restore-cap"), self.config.restore));
@@ -1178,6 +1182,7 @@ impl cosmic::Application for App {
             icon_model: segmented_button::Model::builder()
                 .insert(|b| b.text(fl!("icon-mono")).data(IconStyle::Mono))
                 .insert(|b| b.text(fl!("icon-neon")).data(IconStyle::Neon))
+                .insert(|b| b.text(fl!("icon-auto")).data(IconStyle::Auto))
                 .build(),
             #[cfg(feature = "demo")]
             demo: None,

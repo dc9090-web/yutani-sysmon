@@ -16,6 +16,19 @@ pub enum IconStyle {
     Mono,
     /// Cyan with a glow; magenta when there's an issue.
     Neon,
+    /// Neon while a tunnel is up, Mono while none is.
+    Auto,
+}
+
+impl IconStyle {
+    /// The look to draw: Auto becomes Neon when a tunnel is up (`lit`), else Mono.
+    pub fn resolve(self, lit: bool) -> Self {
+        match self {
+            Self::Auto if lit => Self::Neon,
+            Self::Auto => Self::Mono,
+            s => s,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, CosmicConfigEntry)]
@@ -110,5 +123,14 @@ mod tests {
         assert_eq!(d.clone().enforce(), d);
         let odd = Config { webui_port: 0, qbit_command: Some("  ".into()), ..Config::default() }.enforce();
         assert_eq!((odd.webui_port, odd.qbit_command), (8080, None));
+    }
+
+    #[test]
+    fn icon_style_auto() {
+        assert_eq!(IconStyle::Auto.resolve(true), IconStyle::Neon);
+        assert_eq!(IconStyle::Auto.resolve(false), IconStyle::Mono);
+        for s in [IconStyle::Mono, IconStyle::Neon] {
+            assert_eq!((s.resolve(true), s.resolve(false)), (s, s));
+        }
     }
 }

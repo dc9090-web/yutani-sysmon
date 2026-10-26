@@ -2,7 +2,8 @@
 //!
 //! Neon tints the reticle with the theme's cyan (`palette.accent_blue`), or
 //! pink (`accent_pink`) when there's an issue, over a soft glow drawn as
-//! stacked translucent discs. Off stays muted with no glow.
+//! stacked translucent discs. Off stays muted with no glow. Auto draws Neon
+//! while a tunnel is up and Mono while none is.
 
 use cosmic::iced::alignment::{Horizontal, Vertical};
 use cosmic::iced::mouse;
@@ -62,10 +63,11 @@ impl<M> canvas::Program<M, cosmic::Theme, Renderer> for Glow {
 pub fn reticle<'a, M: 'a>(r: Reticle, issue: Option<Issue>, style: IconStyle, size: f32) -> Element<'a, M> {
     let handle = icon::from_svg_bytes(svg(r)).symbolic(true);
     let lit = r != Reticle::Off;
+    let style = style.resolve(lit);
     let is_issue = issue.is_some();
     let glyph = widget::icon(handle).size(size as u16);
     let glyph: Element<'a, M> = match style {
-        IconStyle::Mono => glyph.class(Ink::On.svg()).into(),
+        IconStyle::Mono | IconStyle::Auto => glyph.class(Ink::On.svg()).into(),
         IconStyle::Neon if !lit && !is_issue => glyph.class(Ink::Muted.svg()).into(),
         IconStyle::Neon => {
             let tinted = glyph.class(theme::Svg::Custom(std::rc::Rc::new(move |t| cosmic::iced::widget::svg::Style { color: Some(neon_color(t, is_issue)) })));
