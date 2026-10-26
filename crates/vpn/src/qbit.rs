@@ -214,8 +214,11 @@ mod tests {
     #[test]
     fn override_command() {
         let c = detect(Some("flatpak run org.qbittorrent.qBittorrent")).unwrap();
-        assert!(c.argv[0].starts_with('/'));
+        // Resolved on PATH when flatpak is installed, else left as given.
+        assert!(c.argv[0].ends_with("flatpak"));
         assert_eq!(&c.argv[1..], ["run", FLATPAK_ID]);
+        // `sh` is on every PATH: a bare command becomes absolute.
+        assert!(detect(Some("sh -c true")).unwrap().argv[0].starts_with('/'));
         assert!(c.conf.ends_with(".var/app/org.qbittorrent.qBittorrent/config/qBittorrent/qBittorrent.conf"));
         let n = detect(Some("/opt/qbt/qbittorrent")).unwrap();
         assert_eq!(n.argv, ["/opt/qbt/qbittorrent"]);
