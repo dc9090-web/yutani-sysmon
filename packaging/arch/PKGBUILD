@@ -6,7 +6,7 @@
 
 pkgbase=yutani-applets
 pkgname=(yutani-net-traffic yutani-sysmon yutani-ai-usage yutani-weather yutani-vpn)
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Yutani COSMIC panel applets'
 arch=(x86_64)

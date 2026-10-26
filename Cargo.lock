@@ -994,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-applet-ai-usage"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-applet-net-traffic"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "i18n-embed",
  "i18n-embed-fl",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-applet-sysmon"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "i18n-embed",
  "i18n-embed-fl",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-applet-vpn"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ashpd 0.11.1",
  "futures-util",
@@ -1070,7 +1070,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-applet-weather"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "i18n-embed",
@@ -1251,7 +1251,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-vpn-helper"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures-util",
  "netlink-packet-route",
@@ -7558,14 +7558,14 @@ dependencies = [
 
 [[package]]
 name = "yutani-monitor-common"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "libcosmic",
 ]
 
 [[package]]
 name = "yutani-vpn-common"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "serde",

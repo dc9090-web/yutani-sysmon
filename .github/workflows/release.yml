@@ -1,4 +1,4 @@
-# Push a tag like v0.1.0 to build every applet on Ubuntu 24.04 (so the
+# Push a tag like v0.2.0 to build every applet on Ubuntu 24.04 (so the
 # binaries run on Pop!_OS / Ubuntu 24.04 and anything newer) and publish
 # .deb, .rpm and Arch packages to a GitHub release.
 name: Release
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to (re)build, e.g. v0.1.0
+        description: Existing tag to (re)build, e.g. v0.2.0
         required: true
 
 permissions:
