@@ -27,7 +27,7 @@ This applet is a sibling of the Network Traffic and System Monitor applets. If t
 
 ## Rules
 
-- **Never write to, refresh or rotate Claude Code's credentials.** Read only (SPEC §3.3). This is the most important rule in the project.
+- **Never write to, refresh or rotate Claude Code's credentials.** Read only (SPEC §3.3). This is the most important rule in the project. The applet's own sign-in (SPEC §3.4) is a separate login it may refresh; it never touches Claude Code's.
 - **The token never reaches logs, the UI, the clipboard or a panic message.** Use a redacting newtype.
 - **One host only: `api.anthropic.com`.** No telemetry; no usage cache on disk.
 - **The endpoint is undocumented.** Keep it isolated in `api.rs`. Unknown shapes go to the "Format not recognised" state, never a panic.

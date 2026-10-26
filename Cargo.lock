@@ -996,18 +996,23 @@ dependencies = [
 name = "cosmic-applet-ai-usage"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
+ "getrandom 0.3.4",
  "i18n-embed",
  "i18n-embed-fl",
  "libcosmic",
  "notify",
+ "oo7",
  "reqwest",
  "rust-embed",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "yutani-monitor-common",
 ]
 

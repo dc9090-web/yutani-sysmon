@@ -46,17 +46,35 @@ offline = Offline
 offline-just-now = Offline · just now
 
 # Banners
-signin-title = Sign in with Claude Code
-signin-body = Run `claude` in a terminal and log in. This applet reads that login and updates automatically.
-login-no-profile = The Claude Code login doesn't include profile access. Log out and in again with `claude`.
+signin-title = Sign in to Claude
+signin-body = Sign in with your Claude account to see your usage limits. The applet keeps itself signed in. If you use Claude Code on this computer, its login works too.
+login-no-profile = The Claude Code login doesn't include profile access. Sign in here instead, or log out and in again with `claude`.
 expired-title = Claude Code login expired
-expired-body = Open Claude Code once to renew it. Showing the last values.
+expired-body = Sign in here and the applet stays signed in on its own, or open Claude Code to renew its login. Showing the last values.
+expired-own-title = Claude sign-in expired
+expired-own-body = Sign in again to keep your usage up to date. Showing the last values.
+signin-waiting-title = Finish signing in in your browser
+signin-waiting-body = Approve the request on claude.ai. This updates as soon as you're done.
+signin-failed-title = Sign-in didn't finish
+signin-failed-timeout = The browser didn't come back in time.
+signin-failed-denied = The request was declined on claude.ai.
+signin-failed-local = Couldn't open the browser or wait for its reply.
+signin-failed-exchange = Claude didn't accept the sign-in. Try again in a moment.
+sign-in = Sign in
+sign-out = Sign out
+cancel = Cancel
+try-again = Try again
 format-title = Usage format not recognised
 format-body = Claude may have changed its usage service. Values can't be shown until the applet is updated.
 copy-diagnostics = Copy diagnostics
 no-fable-limit = No Fable limit on this plan.
 
 # Settings
+account = Account
+account-own = Signed in to Claude
+account-own-desc = Renews itself
+account-claude-code = Using Claude Code's login
+account-claude-code-desc = Sign in here to keep working when Claude Code isn't run on this computer.
 show-in-panel = Show in panel
 toggle-weekly-desc = All models
 toggle-fable-desc = Fable weekly limit
@@ -85,7 +103,7 @@ a11y-format = Claude usage: format not recognised
 a11y-offline = offline, updated { $time } ago
 a11y-offline-never = offline
 a11y-rate-limited = rate limited, retry in { $time }
-a11y-expired = Claude Code login expired
+a11y-expired = Claude login expired
 
 # Panel icon
 panel-icon = Panel icon

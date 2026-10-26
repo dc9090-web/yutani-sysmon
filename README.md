@@ -9,7 +9,7 @@
 
 **Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD or Intel GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
 
-The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes using Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
+The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes, with its own Claude sign-in (kept in the system keyring) or Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
 
 [![Rust](https://img.shields.io/badge/Rust-2024-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![COSMIC](https://img.shields.io/badge/COSMIC-1.10-3b82f6)](https://system76.com/cosmic)
@@ -35,7 +35,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | --- | --- | --- |
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
 | 🖥️ | **System Monitor** | CPU, AMD or Intel GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
-| 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Reuses Claude Code's login, read-only. |
+| 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
 | 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
 
@@ -54,9 +54,9 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 👁️ | **Only what's on screen** | Clocks, VRAM, GPU power and NVMe temps are read only while the popup shows them. The panel needs about 8 small reads a second (on Intel, plus one per GPU client). |
 | 💤 | **Never wakes a sleeping GPU** | A runtime-suspended dGPU reads as idle without touching its sensors, so laptops stay in D3cold. |
 | 🧵 | **Single-thread executor** | One 1 Hz timer per system applet. Rates come from monotonic `Instant` deltas, never an assumed second. AI Usage sleeps until its next request and redraws its countdowns every 30 s. |
-| 🌐 | **One host, no telemetry** | AI Usage talks only to `api.anthropic.com` over rustls, caches nothing on disk, and holds the token only for the length of a request. |
+| 🌐 | **Anthropic only, no telemetry** | AI Usage talks only to Anthropic over rustls (`api.anthropic.com`, plus `platform.claude.com` to renew its own sign-in) and caches no usage on disk. Its own login lives in the keyring; Claude Code's token is held only for the length of a request. |
 | 🗝️ | **Key in the keyring** | Weather keeps your OpenWeather key in the Secret Service keyring (a 0600 file only if there's none), never in config or logs, and talks only to `api.openweathermap.org`. |
-| 🔑 | **Hands off your login** | AI Usage opens Claude Code's credentials read-only and never refreshes the token, so it can't log Claude Code out. |
+| 🔑 | **Hands off your login** | AI Usage has its own Claude sign-in that renews itself, and opens Claude Code's credentials read-only, so it can't log Claude Code out. |
 | 🔒 | **No privileges, except one helper** | The applets never call `sudo` or `pkexec` or write to sysfs; root-only counters show `—`. The one exception is VPN's torrent tunnel: a small D-Bus-activated root helper, sandboxed by systemd and guarded by polkit, that only builds the namespace and starts qBittorrent in it. |
 
 Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the system applets; 6 min, startup included, for AI Usage; 60 s for VPN):
@@ -163,7 +163,7 @@ An icon, then one small bar per window: **5h** (Session), **Week** and **Fable**
 
 - 🤖 **Panel icon:** the symbolic **Robot** (default), or a full-colour **Cyborg** avatar (cyan or red) wrapped in a **session ring**: a fuel gauge of the 5-hour window's % *left*, drawn from 12 o'clock, accent → warning at 80 % used, and a full destructive ring at the limit. The ring ignores the Used/Left setting and dims when data is stale. Avatars need panel size S or larger; at XS the Robot shows.
 - 🎚️ **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the 5-hour window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
-- 🔑 **Login:** it reads Claude Code's own login (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`). It **never writes, refreshes or rotates it**; when the login expires, run `claude` once and the applet picks it up within seconds.
+- 🔑 **Login:** **Sign in** (popup banner, or Settings → Account) opens claude.ai in your browser. The applet then has a login of its own, kept in the system keyring and renewed before it expires, so it keeps working when you use Claude elsewhere and never run `claude` on this computer. Without it, the applet reads Claude Code's login (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`) and **never writes, refreshes or rotates it**; when that login expires, run `claude` once or sign in here. The sign-in uses Claude Code's public OAuth client and asks only for `user:profile`; like the usage endpoint, it's undocumented and could change.
 - 🌐 **Network:** one `GET https://api.anthropic.com/api/oauth/usage` every 1, 5 or 15 minutes (±10 % jitter), on opening the popup if the data is over a minute old, and just after each window resets. It backs off while offline and honours `Retry-After`. No telemetry and no usage cache on disk.
 - 🧪 **Undocumented endpoint:** if its format changes, the popup says "Usage format not recognised" and **Copy diagnostics** copies the HTTP status and the JSON key names only, never values or the token.
 - 🚦 **States:** not signed in, login expired, offline, rate limited, format not recognised and no Fable limit each have their own banner or header text; stale values are dimmed.

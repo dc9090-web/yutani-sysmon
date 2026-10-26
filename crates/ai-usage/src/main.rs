@@ -10,6 +10,7 @@ mod demo;
 mod format;
 mod localize;
 mod model;
+mod oauth;
 mod scheduler;
 mod widgets;
 

@@ -17,6 +17,10 @@ use serde_json::Value;
 pub struct Token(String);
 
 impl Token {
+    pub(crate) fn new(s: String) -> Self {
+        Self(s)
+    }
+
     /// The raw value, for the `Authorization` header only.
     pub fn expose(&self) -> &str {
         &self.0
@@ -145,7 +149,7 @@ fn read_email(candidates: &[PathBuf]) -> Option<String> {
 }
 
 /// "max" → "Max", "team_premium" → "Team premium".
-fn plan_label(s: &str) -> String {
+pub(crate) fn plan_label(s: &str) -> String {
     let s = s.replace('_', " ");
     let mut c = s.chars();
     c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()

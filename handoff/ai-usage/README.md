@@ -1,6 +1,6 @@
 # AI Usage applet: design and spec package
 
-This is the handoff for building a COSMIC panel applet that shows Claude subscription usage: the **Session** (5-hour), **Weekly** and **Fable** limits, with reset times and pace. It reuses the Claude Code login already on the machine, read-only.
+This is the handoff for building a COSMIC panel applet that shows Claude subscription usage: the **Session** (5-hour), **Weekly** and **Fable** limits, with reset times and pace. It has its own Claude sign-in (SPEC §3.4, added 2026-10-26), or reuses the Claude Code login already on the machine, read-only.
 
 ## Using it with Claude Code
 
@@ -27,7 +27,7 @@ This is the handoff for building a COSMIC panel applet that shows Claude subscri
 ## Caveats
 
 - **Undocumented endpoint.** Usage comes from `api.anthropic.com/api/oauth/usage`, the same endpoint Claude Code and YapCap use. It isn't a public API and may change. The applet isolates it and shows "Usage format not recognised" instead of breaking.
-- **Read-only login.** The applet never refreshes Claude Code's token. Refreshing would replace Claude Code's saved token and could log Claude Code out. When the login expires, open Claude Code once.
+- **Read-only login.** The applet never refreshes Claude Code's token. Refreshing would replace Claude Code's saved token and could log Claude Code out. When that login expires, open Claude Code once, or use the applet's own sign-in, which is a separate login it renews itself (SPEC §3.4).
 
 ## Where the values come from
 

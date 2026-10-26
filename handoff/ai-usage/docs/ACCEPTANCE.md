@@ -5,7 +5,8 @@ Run every check in **dark and light**, at panel sizes XS, S and M, on a horizont
 ## Auth and safety
 
 - [ ] S-01: With Claude Code logged in, the applet shows data with zero setup.
-- [ ] S-02: **The credentials files are byte-identical and keep their mtime** before and after 24 h of running (`sha256sum` and `stat`). The applet never calls the token endpoint (check with `strace -f -e trace=network` or an HTTPS proxy log: the only host is `api.anthropic.com`, path `/api/oauth/usage`).
+- [ ] S-02: **The credentials files are byte-identical and keep their mtime** before and after 24 h of running (`sha256sum` and `stat`). Without the applet's own sign-in, it never calls the token endpoint (check with `strace -f -e trace=network` or an HTTPS proxy log: the only host is `api.anthropic.com`, path `/api/oauth/usage`).
+- [ ] S-03: With the applet's own sign-in (SPEC §3.4), the login survives 24 h without running `claude`: it renews at `platform.claude.com/v1/oauth/token` and the rotated refresh token is in the keyring after each renewal. Claude Code's files stay byte-identical (S-02) and Claude Code stays signed in.
 - [ ] S-03: Each fake home in `tests/fixtures/claude-home/` produces its documented state. Pointing `CLAUDE_CONFIG_DIR` at one works.
 - [ ] S-04: After `claude` renews an expired login, the applet recovers within 30 s, with no restart.
 - [ ] S-05: `RUST_LOG=trace` output contains no `sk-ant-` string. Neither does "Copy diagnostics".

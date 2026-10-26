@@ -24,6 +24,7 @@ use crate::config::{APP_ID, Amount, Config, PanelIcon, PanelStyle, REFRESH_CHOIC
 use crate::fl;
 use crate::format::{self, Live};
 use crate::model::{Kind, Snapshot, State, Usage};
+use crate::oauth::{self, RefreshError, Session, SignInError};
 use crate::scheduler::{self, Scheduler};
 use crate::widgets::avatar::{self, Avatar, Ring};
 use crate::widgets::banner::banner;
@@ -75,10 +76,17 @@ pub enum Message {
     TimeConfig(TimeConfig),
     Page(Page),
     Escape,
+    /// The applet's own login, read from the keyring at start.
+    SessionLoaded(Option<Session>),
     /// Read the login and fetch.
     Refresh,
     CredentialsChanged,
-    Fetched(Outcome),
+    Fetched(Outcome, Renewal),
+    /// Open the browser to sign in to Claude.
+    SignIn,
+    SignInCancel,
+    SignedIn(Result<Session, SignInError>),
+    SignOut,
     /// The header's refresh button.
     ManualRefresh,
     /// The 30 s local clock: countdowns, pace and freshness.
@@ -99,6 +107,22 @@ pub enum Message {
     CopyDiagnostics,
 }
 
+/// What a fetch did to the applet's own login.
+#[derive(Debug, Clone)]
+pub enum Renewal {
+    Kept,
+    Renewed(Session),
+    /// The refresh token was refused: sign in again.
+    Revoked,
+}
+
+/// The applet's own sign-in, in progress or failed.
+enum SignInFlow {
+    Idle,
+    Waiting(cosmic::iced::task::Handle),
+    Failed(SignInError),
+}
+
 pub struct App {
     core: Core,
     popup: Option<Id>,
@@ -106,6 +130,13 @@ pub struct App {
     config: Config,
     handler: Option<cosmic_config::Config>,
     paths: Option<Paths>,
+    /// The applet's own login; preferred over Claude Code's.
+    session: Option<Session>,
+    /// The keyring has been read.
+    loaded: bool,
+    sign_in: SignInFlow,
+    /// A sign-in finished during a request: ignore that request's renewal.
+    stale_renewal: bool,
     client: reqwest::Client,
     account: Account,
     state: State,
@@ -192,8 +223,15 @@ impl App {
         if self.demo() {
             return Task::none();
         }
-        if self.fetching {
+        if self.fetching || !self.loaded {
             return Task::none();
+        }
+        if let Some(s) = &self.session {
+            self.account = s.account();
+            self.expires_at = None;
+            self.fetching = true;
+            tracing::debug!("fetching usage with the applet's login");
+            return cosmic::task::future(fetch_own(self.client.clone(), s.clone())).map(|(o, r)| cosmic::Action::App(Message::Fetched(o, r)));
         }
         let Some(paths) = &self.paths else {
             self.set_state(State::NotSignedIn(auth::NoLogin::Missing));
@@ -215,7 +253,7 @@ impl App {
                 self.expires_at = login.expires_at;
                 self.fetching = true;
                 tracing::debug!("fetching usage");
-                cosmic::task::future(api::fetch(self.client.clone(), login.token)).map(|o| cosmic::Action::App(Message::Fetched(o)))
+                cosmic::task::future(api::fetch(self.client.clone(), login.token)).map(|o| cosmic::Action::App(Message::Fetched(o, Renewal::Kept)))
             }
         }
     }
@@ -226,8 +264,39 @@ impl App {
         self.arm(due)
     }
 
-    fn fetched(&mut self, outcome: Outcome) -> Task<Message> {
+    fn fetched(&mut self, outcome: Outcome, renewal: Renewal) -> Task<Message> {
         self.fetching = false;
+        if std::mem::take(&mut self.stale_renewal) {
+            // A sign-in or sign-out replaced the login this request used. A
+            // renewal it saved would have overwritten the keyring: put back
+            // (or remove) the current login.
+            let current = self.session.clone();
+            let refetch = self.refresh();
+            if !matches!(renewal, Renewal::Renewed(_)) {
+                return refetch;
+            }
+            let restore = cosmic::task::future(async move {
+                match current {
+                    Some(s) => oauth::save(&s).await,
+                    None => oauth::forget().await,
+                }
+                Message::Tick
+            });
+            return Task::batch([restore, refetch]);
+        }
+        let mut fallback = false;
+        match renewal {
+            Renewal::Kept => {}
+            Renewal::Renewed(s) => {
+                self.account = s.account();
+                self.session = Some(s);
+            }
+            Renewal::Revoked => {
+                tracing::warn!("the applet's Claude login was refused; sign in again");
+                self.session = None;
+                fallback = true;
+            }
+        }
         let now = Utc::now();
         self.now = now;
         let result = match &outcome {
@@ -255,7 +324,13 @@ impl App {
         let wakeups: Vec<_> = resets.chain(self.expires_at).collect();
         let due = self.scheduler.completed(result, now, self.interval(), scheduler::jitter(), wakeups);
         let mut tasks = vec![self.arm(due), self.redraw_at(self.scheduler.unblocks_at(now))];
-        if std::mem::take(&mut self.refetch) {
+        if fallback {
+            // Forget it, then try Claude Code's login instead.
+            tasks.push(cosmic::task::future(async {
+                oauth::forget().await;
+                Message::Refresh
+            }));
+        } else if std::mem::take(&mut self.refetch) {
             tasks.push(self.refresh());
         }
         Task::batch(tasks)
@@ -520,10 +595,25 @@ impl App {
     }
 
     fn banner(&self) -> Option<Element<'_, Message>> {
+        let sign_in = || Some((fl!("sign-in"), Message::SignIn));
+        match &self.sign_in {
+            SignInFlow::Waiting(_) => return Some(banner(fl!("signin-waiting-title"), fl!("signin-waiting-body"), Some((fl!("cancel"), Message::SignInCancel)))),
+            SignInFlow::Failed(e) => {
+                let body = match e {
+                    SignInError::TimedOut => fl!("signin-failed-timeout"),
+                    SignInError::Denied => fl!("signin-failed-denied"),
+                    SignInError::Local => fl!("signin-failed-local"),
+                    SignInError::Exchange => fl!("signin-failed-exchange"),
+                };
+                return Some(banner(fl!("signin-failed-title"), body, Some((fl!("try-again"), Message::SignIn))));
+            }
+            SignInFlow::Idle => {}
+        }
         Some(match &self.state {
-            State::NotSignedIn(NoLogin::NoProfileScope) => banner(fl!("signin-title"), fl!("login-no-profile"), None),
-            State::NotSignedIn(_) => banner(fl!("signin-title"), fl!("signin-body"), None),
-            State::Expired => banner(fl!("expired-title"), fl!("expired-body"), None),
+            State::NotSignedIn(NoLogin::NoProfileScope) => banner(fl!("signin-title"), fl!("login-no-profile"), sign_in()),
+            State::NotSignedIn(_) => banner(fl!("signin-title"), fl!("signin-body"), sign_in()),
+            State::Expired if self.session.is_some() => banner(fl!("expired-own-title"), fl!("expired-own-body"), sign_in()),
+            State::Expired => banner(fl!("expired-title"), fl!("expired-body"), sign_in()),
             State::Unrecognised(_) => banner(fl!("format-title"), fl!("format-body"), Some((fl!("copy-diagnostics"), Message::CopyDiagnostics))),
             _ => return None,
         })
@@ -541,6 +631,31 @@ impl App {
             col = col.push(widget::container(widget::text::caption(fl!("no-fable-limit")).class(Ink::Muted.text())).padding([space_xxs(), space_m()]));
         }
         col.push(ui::inset_divider()).push(ui::settings_row(fl!("applet-settings"), Message::Page(Page::Settings))).into()
+    }
+
+    /// Which login is in use, with Sign in or Sign out.
+    fn account_row(&self) -> Element<'_, Message> {
+        let waiting = matches!(self.sign_in, SignInFlow::Waiting(_));
+        let (title, caption, button) = match &self.session {
+            Some(s) => (
+                fl!("account-own"),
+                s.email.clone().map_or_else(|| fl!("account-own-desc"), |e| format!("{e} · {}", fl!("account-own-desc"))),
+                widget::button::standard(fl!("sign-out")).on_press(Message::SignOut),
+            ),
+            None => (
+                fl!("account-claude-code"),
+                fl!("account-claude-code-desc"),
+                widget::button::suggested(fl!("sign-in")).on_press_maybe((!waiting).then_some(Message::SignIn)),
+            ),
+        };
+        applet::padded_control(
+            Row::new()
+                .spacing(space_xs())
+                .align_y(Alignment::Center)
+                .push(Column::new().width(Length::Fill).push(widget::text::body(title)).push(widget::text::caption(caption).class(Ink::Muted.text())))
+                .push(button),
+        )
+        .into()
     }
 
     fn settings_page(&self) -> Element<'_, Message> {
@@ -623,6 +738,9 @@ impl App {
         let note = if self.config.icon == PanelIcon::Robot { fl!("icon-note-symbolic") } else { fl!("icon-note-avatar") };
         Column::new()
             .push(ui::back_header(fl!("applet-settings"), fl!("back"), Message::Page(Page::Main)))
+            .push(ui::group_label(fl!("account")))
+            .push(self.account_row())
+            .push(ui::inset_divider())
             .push(ui::group_label(fl!("panel-icon")))
             .push(applet::padded_control(Column::new().spacing(space_xxs()).push(tiles).push(widget::text::caption(note).class(Ink::Muted.text()))))
             .push(ui::inset_divider())
@@ -668,6 +786,10 @@ impl cosmic::Application for App {
             config,
             handler,
             paths: Paths::discover(),
+            session: None,
+            loaded: false,
+            sign_in: SignInFlow::Idle,
+            stale_renewal: false,
             client: api::client(),
             account: Account::default(),
             state: State::Loading,
@@ -721,7 +843,7 @@ impl cosmic::Application for App {
             }
             return (app, Task::none());
         }
-        (app, cosmic::task::message(Message::Refresh))
+        (app, cosmic::task::future(oauth::load()).map(|s| cosmic::Action::App(Message::SessionLoaded(s))))
     }
 
     fn on_close_requested(&self, id: Id) -> Option<Message> {
@@ -792,16 +914,65 @@ impl cosmic::Application for App {
             }
             Message::Page(p) => self.page = p,
             Message::TimeConfig(t) => self.military = t.military_time,
+            Message::SessionLoaded(s) => {
+                tracing::debug!(signed_in = s.is_some(), "applet login loaded");
+                self.session = s;
+                self.loaded = true;
+                return self.refresh();
+            }
             Message::Refresh => return self.refresh(),
+            Message::SignIn => {
+                if !matches!(self.sign_in, SignInFlow::Waiting(_)) {
+                    let (task, handle) = cosmic::task::future(oauth::sign_in(self.client.clone())).abortable();
+                    self.sign_in = SignInFlow::Waiting(handle);
+                    return task.map(|r| cosmic::Action::App(Message::SignedIn(r)));
+                }
+            }
+            Message::SignInCancel => {
+                if let SignInFlow::Waiting(h) = std::mem::replace(&mut self.sign_in, SignInFlow::Idle) {
+                    h.abort();
+                }
+            }
+            Message::SignedIn(Err(e)) => {
+                tracing::warn!(error = ?e, "sign-in didn't finish");
+                self.sign_in = SignInFlow::Failed(e);
+            }
+            Message::SignedIn(Ok(s)) => {
+                tracing::info!("signed in to Claude");
+                self.sign_in = SignInFlow::Idle;
+                self.account = s.account();
+                self.session = Some(s.clone());
+                let save = cosmic::task::future(async move {
+                    oauth::save(&s).await;
+                    Message::Refresh
+                });
+                // An in-flight request's result is for the old login.
+                self.stale_renewal |= self.fetching;
+                return save;
+            }
+            Message::SignOut => {
+                tracing::info!("signed out of the applet's Claude login");
+                self.session = None;
+                self.account = Account::default();
+                if self.fetching {
+                    self.stale_renewal = true;
+                }
+                return cosmic::task::future(async {
+                    oauth::forget().await;
+                    Message::Refresh
+                });
+            }
             Message::CredentialsChanged => {
                 tracing::debug!("re-reading credentials");
-                if self.fetching {
+                if self.session.is_some() {
+                    // Claude Code's login isn't in use.
+                } else if self.fetching {
                     self.refetch = true;
                 } else {
                     return self.refresh();
                 }
             }
-            Message::Fetched(o) => return self.fetched(o),
+            Message::Fetched(o, r) => return self.fetched(o, r),
             Message::ManualRefresh => {
                 if self.scheduler.can_refresh(Utc::now(), self.fetching) {
                     tracing::debug!("manual refresh");
@@ -904,6 +1075,38 @@ fn open_popup(bounds: Rectangle, offset: cosmic::iced::Vector) -> cosmic::surfac
         },
         Some(Box::new(|state: &App| Element::from(state.core.applet.popup_container(state.popup_view())).map(cosmic::Action::App))),
     )
+}
+
+/// A fetch with the applet's own login, renewing it first if it's about to
+/// expire, and once more if the server turns the access token down.
+/// Renewals are saved before this returns, so a rotated refresh token is
+/// never lost.
+async fn fetch_own(client: reqwest::Client, mut s: Session) -> (Outcome, Renewal) {
+    async fn renew(client: &reqwest::Client, s: &Session) -> Result<Session, RefreshError> {
+        let next = oauth::refresh(client, s).await?;
+        oauth::save(&next).await;
+        Ok(next)
+    }
+    let mut renewal = Renewal::Kept;
+    if s.needs_refresh(Utc::now()) {
+        match renew(&client, &s).await {
+            Ok(next) => {
+                s = next.clone();
+                renewal = Renewal::Renewed(next);
+            }
+            Err(RefreshError::Revoked) => return (Outcome::Unauthorized, Renewal::Revoked),
+            Err(RefreshError::Offline) => return (Outcome::Offline, Renewal::Kept),
+        }
+    }
+    let outcome = api::fetch(client.clone(), s.token()).await;
+    if !matches!(outcome, Outcome::Unauthorized) || matches!(renewal, Renewal::Renewed(_)) {
+        return (outcome, renewal);
+    }
+    match renew(&client, &s).await {
+        Ok(next) => (api::fetch(client, next.token()).await, Renewal::Renewed(next)),
+        Err(RefreshError::Revoked) => (Outcome::Unauthorized, Renewal::Revoked),
+        Err(RefreshError::Offline) => (Outcome::Offline, Renewal::Kept),
+    }
 }
 
 /// Panel label: `5h`, `Week`, `Fable`.

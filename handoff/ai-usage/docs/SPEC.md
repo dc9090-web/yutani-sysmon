@@ -64,6 +64,16 @@ Check this against the installed Claude Code version. If it has changed, say so 
 - **Don't keep the token around.** Hold it in memory only, and drop it after each request (re-read the file each time). Never log it; redact anything matching `sk-ant-` in logs.
 - **Plan label:** title-case `subscriptionType` ("Max", "Pro"); unknown values are shown verbatim, title-cased.
 
+### 3.4 The applet's own sign-in (added 2026-10-26)
+
+Claude Code's access token lasts about 8 hours and is renewed only when `claude` runs on this computer, so a user working remotely saw *Login expired* most of the time. The applet can now sign in by itself; that login is preferred over Claude Code's when present.
+
+- **Flow:** OAuth 2 authorization code + PKCE (S256) with Claude Code's public client `9d1c250a-e61b-44d9-88ed-5944d1962f5e`. Authorize at `https://claude.com/cai/oauth/authorize` (`code=true`, `scope=user:profile`, redirect `http://localhost:<port>/callback` on a loopback listener bound to 127.0.0.1 and ::1); exchange and refresh at `https://platform.claude.com/v1/oauth/token` (JSON body). Email and plan come from `GET https://api.anthropic.com/api/oauth/profile` (`account.email`, `organization.organization_type`, "claude_max" → "Max"). These are Claude Code's own values, taken from its binary; none is documented.
+- **Separate token family.** It's an independent login, like signing in on a second machine, so refreshing it never affects Claude Code's tokens. The §3.3 rules still hold for Claude Code's file.
+- **Storage:** one Secret Service item (`application` = app ID, `kind` = `claude-oauth`) holding the access token, refresh token, expiry, email and plan as JSON. Never on disk in the clear, never logged.
+- **Refresh:** before a fetch when the access token expires within 5 minutes, and once more if the usage endpoint answers 401/403. A rotated refresh token is saved to the keyring before the fetch result is used. 400/401/403 from the token endpoint means the login is dead: forget it and fall back to Claude Code's login; anything else counts as offline.
+- **UI:** a **Sign in** button on the *Not signed in* and *Login expired* banners, and an **Account** group at the top of Settings (Sign in / Sign out). While waiting for the browser the banner reads "Finish signing in in your browser" with **Cancel**; the wait times out after 10 minutes.
+
 ## 4. Usage endpoint
 
 `GET https://api.anthropic.com/api/oauth/usage`
@@ -189,8 +199,8 @@ Every change applies immediately and persists.
 | State | Trigger | Panel | Popup |
 |---|---|---|---|
 | Normal | 200 OK, fresh | Live bars | Rows |
-| Not signed in | No credentials file, or `user:profile` missing | Icon only (avatar: track only) | Banner: "Sign in with Claude Code". Body: run `claude` and log in. No rows. |
-| Login expired | `expiresAt` ≤ now, or 401/403 | Stale bars | Banner: "Claude Code login expired · Open Claude Code once to renew it." Rows dimmed. |
+| Not signed in | No applet login and no usable Claude Code login | Icon only (avatar: track only) | Banner: "Sign in to Claude" with **Sign in** (§3.4). No rows. |
+| Login expired | Claude Code's `expiresAt` ≤ now, or 401/403 that a refresh (§3.4) can't fix | Stale bars | Banner: "Claude Code login expired" (or "Claude sign-in expired") with **Sign in**. Rows dimmed. |
 | Offline | Network error | Stale bars | Header: "Offline · 25m ago" (warning). Rows dimmed. |
 | Rate limited | 429 | Stale bars | Header: "Rate limited · retry in 4m" (warning). Rows dimmed. |
 | Format not recognised | §4.1 | Icon only (avatar: track only) | Banner: "Usage format not recognised", with a "Copy diagnostics" button that copies the HTTP status and the JSON **keys only**, never the values or the token. |
