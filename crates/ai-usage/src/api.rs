@@ -94,16 +94,12 @@ pub(crate) fn retry_after(v: Option<&str>) -> Duration {
     Duration::from_secs(v.and_then(|s| s.trim().parse::<u64>().ok()).unwrap_or(300))
 }
 
-/// The windows in a response, or `None` if neither `five_hour` nor
-/// `seven_day` is there.
+/// The windows in a response, or `None` if `seven_day` isn't there. The
+/// `five_hour` window, when present, is ignored.
 pub fn parse(json: &Value) -> Option<Usage> {
-    let session = window(json.get("five_hour"), "utilization", Kind::Session);
-    let weekly = window(json.get("seven_day"), "utilization", Kind::Weekly);
-    if session.is_none() && weekly.is_none() {
-        return None;
-    }
+    let weekly = window(json.get("seven_day"), "utilization", Kind::Weekly)?;
     let fable = json.get("limits").and_then(Value::as_array).and_then(|l| l.iter().find(|e| is_fable(e))).and_then(|e| window(Some(e), "percent", Kind::Fable));
-    Some(Usage { windows: [session, weekly, fable].into_iter().flatten().collect() })
+    Some(Usage { windows: [Some(weekly), fable].into_iter().flatten().collect() })
 }
 
 /// A `{ <field>: 0–100, resets_at }` object. A null or missing percentage
@@ -171,38 +167,38 @@ mod tests {
     #[test]
     fn normal_with_fable() {
         let u = parse(&fixture("normal_with_fable")).unwrap();
-        assert_eq!(used(&u), [(Kind::Session, 42.0), (Kind::Weekly, 61.0), (Kind::Fable, 84.0)]);
-        assert_eq!(u.get(Kind::Session).unwrap().resets_at, at("2026-10-08T12:13:00Z"));
+        // The 5-hour window in the fixture is ignored.
+        assert_eq!(used(&u), [(Kind::Weekly, 61.0), (Kind::Fable, 84.0)]);
+        assert_eq!(u.get(Kind::Weekly).unwrap().resets_at, at("2026-10-11T14:00:00Z"));
         assert_eq!(u.get(Kind::Fable).unwrap().resets_at, at("2026-10-11T14:00:00Z"));
     }
 
     #[test]
     fn weekly_only() {
-        // Claude dropped the 5-hour window (2026-11): no Session, Fable matched by name.
+        // No 5-hour window at all (as on 2026-11-01); Fable matched by name.
         let u = parse(&fixture("weekly_only")).unwrap();
         assert_eq!(used(&u), [(Kind::Weekly, 76.0), (Kind::Fable, 48.0)]);
         assert_eq!(u.get(Kind::Weekly).unwrap().resets_at, at("2026-10-11T14:00:00.152293Z"));
-        assert_eq!(u.get(Kind::Session), None);
     }
 
     #[test]
     fn no_fable_limit() {
         let u = parse(&fixture("no_fable_limit")).unwrap();
-        assert_eq!(used(&u), [(Kind::Session, 12.0), (Kind::Weekly, 34.0)]);
+        assert_eq!(used(&u), [(Kind::Weekly, 34.0)]);
     }
 
     #[test]
     fn legacy_no_limits_array() {
         // No Fable window, and no fallback to seven_day_opus / seven_day_sonnet.
         let u = parse(&fixture("legacy_no_limits_array")).unwrap();
-        assert_eq!(used(&u), [(Kind::Session, 5.0), (Kind::Weekly, 10.0)]);
+        assert_eq!(used(&u), [(Kind::Weekly, 10.0)]);
         assert!(u.windows.iter().all(|w| w.resets_at.is_none()));
     }
 
     #[test]
     fn session_limit_reached() {
         let u = parse(&fixture("session_limit_reached")).unwrap();
-        assert_eq!(used(&u), [(Kind::Session, 100.0), (Kind::Weekly, 88.0), (Kind::Fable, 100.0)]);
+        assert_eq!(used(&u), [(Kind::Weekly, 88.0), (Kind::Fable, 100.0)]);
     }
 
     #[test]
@@ -215,22 +211,23 @@ mod tests {
     #[test]
     fn clamping_and_nulls() {
         let v = serde_json::json!({
-            "five_hour": { "utilization": 140.0, "resets_at": "not a date" },
-            "seven_day": { "utilization": null, "resets_at": null },
+            "five_hour": { "utilization": 12.0 },
+            "seven_day": { "utilization": 140.0, "resets_at": "not a date" },
             "limits": [{ "kind": "weekly_scoped", "group": "weekly", "percent": -3, "scope": { "model": { "id": "fable-5" } } }]
         });
         let u = parse(&v).unwrap();
-        assert_eq!(used(&u), [(Kind::Session, 100.0), (Kind::Fable, 0.0)]);
-        assert_eq!(u.get(Kind::Session).unwrap().resets_at, None);
-        // Both main windows null: not recognised.
-        assert_eq!(parse(&serde_json::json!({ "five_hour": { "utilization": null }, "seven_day": null })), None);
+        assert_eq!(used(&u), [(Kind::Weekly, 100.0), (Kind::Fable, 0.0)]);
+        assert_eq!(u.get(Kind::Weekly).unwrap().resets_at, None);
+        // No weekly window: not recognised, even with a 5-hour one.
+        assert_eq!(parse(&serde_json::json!({ "five_hour": { "utilization": 1 }, "seven_day": { "utilization": null } })), None);
+        assert_eq!(parse(&serde_json::json!({ "five_hour": { "utilization": 1 }, "seven_day": null })), None);
         assert_eq!(parse(&serde_json::json!([1, 2])), None);
     }
 
     #[test]
     fn fable_matching() {
         let entry = |group: &str, kind: &str, name: &str, id: &str| {
-            serde_json::json!({ "five_hour": { "utilization": 1 }, "limits": [
+            serde_json::json!({ "seven_day": { "utilization": 1 }, "limits": [
                 { "group": group, "kind": kind, "percent": 50, "scope": { "model": { "display_name": name, "id": id } } }
             ]})
         };

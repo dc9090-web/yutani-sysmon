@@ -5,22 +5,20 @@ use chrono::{DateTime, TimeDelta, Utc};
 use crate::api::Diagnostics;
 use crate::auth::NoLogin;
 
-/// The three windows, in their fixed display order.
+/// The two windows, in their fixed display order. Weekly is the plan's
+/// 7-day limit across all models, shown as "Session"; the 5-hour window
+/// Claude used to return is ignored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
-    Session,
     Weekly,
     Fable,
 }
 
 impl Kind {
-    pub const ALL: [Self; 3] = [Self::Session, Self::Weekly, Self::Fable];
+    pub const ALL: [Self; 2] = [Self::Weekly, Self::Fable];
 
     pub fn length(self) -> TimeDelta {
-        match self {
-            Self::Session => TimeDelta::hours(5),
-            Self::Weekly | Self::Fable => TimeDelta::days(7),
-        }
+        TimeDelta::days(7)
     }
 }
 

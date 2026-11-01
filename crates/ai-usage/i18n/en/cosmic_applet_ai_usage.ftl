@@ -9,13 +9,10 @@ refreshing = Refreshing…
 not-signed-in = Not signed in
 
 # Windows
-session = Session
-session-desc = 5-hour window
-weekly = Weekly
+weekly = Session
 weekly-desc = All models · 7 days
 fable = Fable
 fable-desc = Fable · 7 days
-label-session = 5h
 label-weekly = Week
 label-fable = Fable
 label-reset = Reset
@@ -90,7 +87,7 @@ account-own-desc = Renews itself
 account-claude-code = Using Claude Code's login
 account-claude-code-desc = Sign in here to keep working when Claude Code isn't run on this computer.
 show-in-panel = Show in panel
-toggle-weekly-desc = All models
+toggle-weekly-desc = All models · 7 days
 toggle-fable-desc = Fable weekly limit
 toggle-credits-desc = This month's API spend against the credit
 weekly-reset = Weekly reset

@@ -36,7 +36,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | --- | --- | --- |
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
 | 🖥️ | **System Monitor** | CPU, AMD, Intel or NVIDIA GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
-| 🤖 | **AI Usage** | Claude's Weekly and Fable limits (and the 5-hour Session, on plans that still have one) as small bars in the panel, with reset times and pace in the popup, plus this month's spend of the API credits that come with Max, Ultra and Team plans. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
+| 🤖 | **AI Usage** | Claude's Session (7-day, all models) and Fable limits as small bars in the panel, with reset times and pace in the popup, plus this month's spend of the API credits that come with Max, Ultra and Team plans. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
 | 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
 
@@ -161,7 +161,7 @@ The applet picks it up within 30 s, with no restart. To undo it, delete the rule
 
 *Screenshots use the demo data (`just demo`), not a real account.*
 
-An icon, then one small bar per window: **Week**, **Fable** and, with an Admin key, **API** (this month's credits), in that order; plans that still have the 5-hour Session window get a **5h** bar first. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 3d 4h" or "Resets Sat 9:00 AM") and pace ("14% under pace").
+An icon, then one small bar per window: **Week** (the 7-day all-models limit, listed as **Session** in the popup), **Fable** and, with an Admin key, **API** (this month's credits), in that order. The 5-hour window Claude sometimes returns is ignored. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 3d 4h" or "Resets Sat 9:00 AM") and pace ("14% under pace").
 
 - 🤖 **Panel icon:** the symbolic **Robot** (default), or a full-colour **Cyborg** avatar (cyan or red) wrapped in a **weekly ring**: a fuel gauge of the 7-day window's % *left*, drawn from 12 o'clock, accent → warning at 80 % used, and a full destructive ring at the limit. The ring ignores the Used/Left setting and dims when data is stale. Avatars need panel size S or larger; at XS the Robot shows.
 - 🎚️ **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the weekly window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
@@ -321,7 +321,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | --- | --- | --- |
 | Network Traffic | `~/.config/cosmic/io.github.dc.CosmicAppletNetTraffic/v1/` | `mode`, `indicator`, `adapter` |
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
-| AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_session`, `show_weekly`, `show_fable`, `show_credits`, `show_weekly_reset`, `style`, `amount`, `reset_format`, `refresh_minutes`, `credit_dollars`, `credit_renew_day` (the Admin key is in the keyring, never here) |
+| AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_weekly`, `show_fable`, `show_credits`, `show_weekly_reset`, `style`, `amount`, `reset_format`, `refresh_minutes`, `credit_dollars`, `credit_renew_day` (the Admin key is in the keyring, never here) |
 | VPN | `~/.config/cosmic/io.github.dc.CosmicAppletVpn/v1/` | `p2p_conf`, `web_conf`, `web_nm_uuid`, `launch_qbit`, `quit_qbit`, `auto_port`, `webui_port`, `webui_user`, `show_port`, `show_p2p_off`, `show_web_off`, `restore`, `last_p2p`, `last_web`, `qbit_command`, `icon_style` (no keys or passwords) |
 | Weather | `~/.config/cosmic/io.github.dc.CosmicAppletWeather/v1/` | `locations`, `panel_location`, `units`, `icon_set`, `show_city`, `show_hilo`, `refresh_minutes` (the API key is in the keyring, never here) |
 

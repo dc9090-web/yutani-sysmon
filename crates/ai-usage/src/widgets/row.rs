@@ -29,7 +29,6 @@ pub struct Ctx {
 
 pub fn name(kind: Kind) -> String {
     match kind {
-        Kind::Session => fl!("session"),
         Kind::Weekly => fl!("weekly"),
         Kind::Fable => fl!("fable"),
     }
@@ -37,7 +36,6 @@ pub fn name(kind: Kind) -> String {
 
 fn description(kind: Kind) -> String {
     match kind {
-        Kind::Session => fl!("session-desc"),
         Kind::Weekly => fl!("weekly-desc"),
         Kind::Fable => fl!("fable-desc"),
     }

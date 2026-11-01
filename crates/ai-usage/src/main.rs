@@ -1,5 +1,5 @@
 //! AI Usage: a COSMIC panel applet showing the Claude subscription's
-//! Session, Weekly and Fable usage limits.
+//! Session (7-day, all models) and Fable usage limits.
 
 mod api;
 mod app;

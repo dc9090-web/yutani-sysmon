@@ -574,7 +574,6 @@ impl App {
 
     fn enabled(&self, kind: Kind) -> bool {
         match kind {
-            Kind::Session => self.config.show_session,
             Kind::Weekly => self.config.show_weekly,
             Kind::Fable => self.config.show_fable,
         }
@@ -889,15 +888,9 @@ impl App {
     }
 
     fn settings_page(&self) -> Element<'_, Message> {
-        // The Session toggle only while the plan still has that window.
-        let has_session = self.usage().is_some_and(|u| u.get(Kind::Session).is_some());
-        let listed: Vec<Kind> = Kind::ALL.into_iter().filter(|k| *k != Kind::Session || has_session).collect();
-        let windows_on = listed.iter().filter(|k| self.enabled(**k)).count();
+        let windows_on = Kind::ALL.iter().filter(|k| self.enabled(**k)).count();
         let mut toggles = Column::new();
         let mut rows = Vec::new();
-        if has_session {
-            rows.push((Toggle::Window(Kind::Session), name(Kind::Session), fl!("session-desc")));
-        }
         rows.push((Toggle::Window(Kind::Weekly), name(Kind::Weekly), fl!("toggle-weekly-desc")));
         rows.push((Toggle::Window(Kind::Fable), name(Kind::Fable), fl!("toggle-fable-desc")));
         if self.admin_key.is_some() {
@@ -1255,7 +1248,6 @@ impl cosmic::Application for App {
                 }
             }
             Message::Show(t, on) => match t {
-                Toggle::Window(Kind::Session) => self.save(|c, h| c.set_show_session(h, on)),
                 Toggle::Window(Kind::Weekly) => self.save(|c, h| c.set_show_weekly(h, on)),
                 Toggle::Window(Kind::Fable) => self.save(|c, h| c.set_show_fable(h, on)),
                 Toggle::Credits => self.save(|c, h| c.set_show_credits(h, on)),
@@ -1439,10 +1431,9 @@ async fn fetch_own(client: reqwest::Client, mut s: Session) -> (Outcome, Renewal
     }
 }
 
-/// Panel label: `5h`, `Week`, `Fable`.
+/// Panel label: `Week`, `Fable`.
 fn label(kind: Kind) -> String {
     match kind {
-        Kind::Session => fl!("label-session"),
         Kind::Weekly => fl!("label-weekly"),
         Kind::Fable => fl!("label-fable"),
     }

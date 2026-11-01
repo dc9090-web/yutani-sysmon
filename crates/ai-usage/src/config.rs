@@ -69,7 +69,8 @@ pub const REFRESH_CHOICES: [u8; 3] = [1, 5, 15];
 #[version = 1]
 pub struct Config {
     pub icon: PanelIcon,
-    pub show_session: bool,
+    /// The 7-day all-models window, shown as "Session". (The old
+    /// `show_session` key for the 5-hour window is ignored.)
     pub show_weekly: bool,
     pub show_fable: bool,
     pub show_weekly_reset: bool,
@@ -89,7 +90,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             icon: PanelIcon::Robot,
-            show_session: true,
             show_weekly: true,
             show_fable: true,
             show_weekly_reset: false,
@@ -111,7 +111,7 @@ impl Config {
     /// At least one window stays on; an unknown interval becomes 5 min, an
     /// unknown credit $200, and a renew day outside 1–31 the 1st.
     pub fn enforce(mut self) -> Self {
-        if !(self.show_session || self.show_weekly || self.show_fable) {
+        if !(self.show_weekly || self.show_fable) {
             self.show_weekly = true;
         }
         if !REFRESH_CHOICES.contains(&self.refresh_minutes) {
@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn defaults() {
         let d = Config::default();
-        assert!(d.show_session && d.show_weekly && d.show_fable && !d.show_weekly_reset && d.show_credits);
+        assert!(d.show_weekly && d.show_fable && !d.show_weekly_reset && d.show_credits);
         assert_eq!((d.credit_dollars, d.credit_renew_day), (200, 1));
         assert_eq!(d.icon, PanelIcon::Robot);
         assert_eq!((d.style, d.amount, d.reset_format, d.refresh_minutes), (PanelStyle::Bars, Amount::Used, ResetFormat::Relative, 5));
@@ -162,11 +162,11 @@ mod tests {
 
     #[test]
     fn invariant() {
-        let none = Config { show_session: false, show_weekly: false, show_fable: false, ..Config::default() };
+        let none = Config { show_weekly: false, show_fable: false, ..Config::default() };
         let fixed = none.enforce();
-        assert!(!fixed.show_session && fixed.show_weekly && !fixed.show_fable);
+        assert!(fixed.show_weekly && !fixed.show_fable);
         // Only the Fable window on is fine as it is.
-        let fable = Config { show_session: false, show_weekly: false, ..Config::default() };
+        let fable = Config { show_weekly: false, ..Config::default() };
         assert_eq!(fable.clone().enforce(), fable);
     }
 

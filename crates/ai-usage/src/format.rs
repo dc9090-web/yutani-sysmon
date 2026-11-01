@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn pace_examples() {
-        let five = Kind::Session.length();
+        let five = TimeDelta::hours(5);
         // 2h 13m before reset: 2h 47m of 5h elapsed = 55.7% expected.
         let p = pace(five, 42.0, now() + mins(133), now()).unwrap();
         assert!((p.expected - 55.666).abs() < 0.01);
@@ -286,13 +286,13 @@ mod tests {
 
     #[test]
     fn no_pace_without_reset() {
-        let w = Window { kind: Kind::Session, used: 5.0, resets_at: None };
+        let w = Window { kind: Kind::Weekly, used: 5.0, resets_at: None };
         assert_eq!(Live::of(&w, now()).pace(now()), None);
     }
 
     #[test]
     fn elapsed_window() {
-        let w = Window { kind: Kind::Session, used: 100.0, resets_at: Some(now() - mins(1)) };
+        let w = Window { kind: Kind::Weekly, used: 100.0, resets_at: Some(now() - mins(1)) };
         let l = Live::of(&w, now());
         assert!(l.resetting);
         assert_eq!((l.used, l.level(), l.pace(now())), (0.0, Level::Normal, None));
