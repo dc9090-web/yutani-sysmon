@@ -72,11 +72,17 @@ pub struct Config {
     pub show_session: bool,
     pub show_weekly: bool,
     pub show_fable: bool,
-    pub show_session_reset: bool,
+    pub show_weekly_reset: bool,
+    /// The API credits chunk (drawn only once an Admin key is saved).
+    pub show_credits: bool,
     pub style: PanelStyle,
     pub amount: Amount,
     pub reset_format: ResetFormat,
     pub refresh_minutes: u8,
+    /// The monthly Claude Platform credit, in dollars: 100 or 200.
+    pub credit_dollars: u16,
+    /// Day of the month the credits arrive, 1–31.
+    pub credit_renew_day: u8,
 }
 
 impl Default for Config {
@@ -86,23 +92,36 @@ impl Default for Config {
             show_session: true,
             show_weekly: true,
             show_fable: true,
-            show_session_reset: false,
+            show_weekly_reset: false,
+            show_credits: true,
             style: PanelStyle::Bars,
             amount: Amount::Used,
             reset_format: ResetFormat::Relative,
             refresh_minutes: 5,
+            credit_dollars: 200,
+            credit_renew_day: 1,
         }
     }
 }
 
+/// The monthly credits offered, in dollars (Max, Ultra).
+pub const CREDIT_CHOICES: [u16; 2] = [100, 200];
+
 impl Config {
-    /// At least one window stays on; an unknown interval becomes 5 min.
+    /// At least one window stays on; an unknown interval becomes 5 min, an
+    /// unknown credit $200, and a renew day outside 1–31 the 1st.
     pub fn enforce(mut self) -> Self {
         if !(self.show_session || self.show_weekly || self.show_fable) {
-            self.show_session = true;
+            self.show_weekly = true;
         }
         if !REFRESH_CHOICES.contains(&self.refresh_minutes) {
             self.refresh_minutes = 5;
+        }
+        if !CREDIT_CHOICES.contains(&self.credit_dollars) {
+            self.credit_dollars = 200;
+        }
+        if !(1..=31).contains(&self.credit_renew_day) {
+            self.credit_renew_day = 1;
         }
         self
     }
@@ -134,7 +153,8 @@ mod tests {
     #[test]
     fn defaults() {
         let d = Config::default();
-        assert!(d.show_session && d.show_weekly && d.show_fable && !d.show_session_reset);
+        assert!(d.show_session && d.show_weekly && d.show_fable && !d.show_weekly_reset && d.show_credits);
+        assert_eq!((d.credit_dollars, d.credit_renew_day), (200, 1));
         assert_eq!(d.icon, PanelIcon::Robot);
         assert_eq!((d.style, d.amount, d.reset_format, d.refresh_minutes), (PanelStyle::Bars, Amount::Used, ResetFormat::Relative, 5));
         assert_eq!(d.clone().enforce(), d);
@@ -144,10 +164,20 @@ mod tests {
     fn invariant() {
         let none = Config { show_session: false, show_weekly: false, show_fable: false, ..Config::default() };
         let fixed = none.enforce();
-        assert!(fixed.show_session && !fixed.show_weekly && !fixed.show_fable);
+        assert!(!fixed.show_session && fixed.show_weekly && !fixed.show_fable);
         // Only the Fable window on is fine as it is.
         let fable = Config { show_session: false, show_weekly: false, ..Config::default() };
         assert_eq!(fable.clone().enforce(), fable);
+    }
+
+    #[test]
+    fn credit_settings() {
+        for (stored, used) in [(100, 100), (200, 200), (0, 200), (150, 200), (500, 200)] {
+            assert_eq!(Config { credit_dollars: stored, ..Config::default() }.enforce().credit_dollars, used);
+        }
+        for (stored, used) in [(1, 1), (28, 28), (31, 31), (0, 1), (32, 1)] {
+            assert_eq!(Config { credit_renew_day: stored, ..Config::default() }.enforce().credit_renew_day, used);
+        }
     }
 
     #[test]

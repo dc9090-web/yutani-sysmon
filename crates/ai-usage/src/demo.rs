@@ -47,6 +47,7 @@ pub fn enabled() -> bool {
 
 fn json(name: &str) -> Value {
     let s = match name {
+        "weekly_only" => include_str!("../tests/fixtures/usage/weekly_only.json"),
         "normal_with_fable" => include_str!("../tests/fixtures/usage/normal_with_fable.json"),
         "no_fable_limit" => include_str!("../tests/fixtures/usage/no_fable_limit.json"),
         "session_limit_reached" => include_str!("../tests/fixtures/usage/session_limit_reached.json"),
@@ -71,15 +72,22 @@ pub struct Scene {
     pub account: Account,
     pub state: State,
     pub snapshot: Option<Snapshot>,
+    /// This cycle's API spend in cents, when the scene has an Admin key.
+    pub credits: Option<i64>,
 }
 
 pub const SCENES: usize = 11;
 
 pub fn scene(i: usize, now: DateTime<Utc>) -> Scene {
-    let max = Account { plan: Some("Max".into()), email: Some("dc@example.com".into()) };
+    let max = Account { plan: Some("Ultra".into()), email: Some("dc@example.com".into()) };
     let snap = |name: &str, age_min: i64| Some(Snapshot { usage: usage(name, now), fetched_at: now - TimeDelta::minutes(age_min) });
+    let credits = match i % SCENES {
+        0 | 9 => Some(3720),
+        2 => Some(20510),
+        _ => None,
+    };
     let (account, state, snapshot) = match i % SCENES {
-        0 => (max, State::Normal, snap("normal_with_fable", 2)),
+        0 => (max, State::Normal, snap("weekly_only", 2)),
         1 => (Account { plan: Some("Pro".into()), ..max }, State::Normal, snap("no_fable_limit", 0)),
         2 => (max, State::Normal, snap("session_limit_reached", 1)),
         3 => (max, State::Normal, snap("legacy_no_limits_array", 0)),
@@ -89,16 +97,16 @@ pub fn scene(i: usize, now: DateTime<Utc>) -> Scene {
         7 => (Account::default(), State::NotSignedIn(NoLogin::Missing), None),
         8 => (Account::default(), State::NotSignedIn(NoLogin::NoProfileScope), None),
         9 => {
-            // Session at 87%: the avatar ring shows 13% left in the warning colour.
-            let mut s = snap("normal_with_fable", 1);
-            if let Some(w) = s.as_mut().and_then(|s| s.usage.windows.iter_mut().find(|w| w.kind == crate::model::Kind::Session)) {
+            // Weekly at 87%: the avatar ring shows 13% left in the warning colour.
+            let mut s = snap("weekly_only", 1);
+            if let Some(w) = s.as_mut().and_then(|s| s.usage.windows.iter_mut().find(|w| w.kind == crate::model::Kind::Weekly)) {
                 w.used = 87.0;
             }
             (max, State::Normal, s)
         }
         _ => (max, State::Unrecognised(Diagnostics { status: 200, keys: api::key_paths(&json("unknown_shape")) }), None),
     };
-    Scene { account, state, snapshot }
+    Scene { account, state, snapshot, credits }
 }
 
 #[cfg(test)]
@@ -112,9 +120,11 @@ mod tests {
         for s in ["normal", "offline", "rate-limited", "login-expired", "not-signed-in", "format-not-recognised"] {
             assert!(names.contains(&s), "{s} missing from the demo");
         }
-        // Reset times are moved to the real clock.
+        // Reset times are moved to the real clock: the weekly window resets in 3d 4h.
         let s = scene(0, now).snapshot.unwrap();
-        let session = s.usage.windows[0].resets_at.unwrap();
-        assert_eq!(session - now, TimeDelta::minutes(2 * 60 + 13));
+        assert_eq!(s.usage.windows[0].kind, crate::model::Kind::Weekly);
+        let weekly = s.usage.windows[0].resets_at.unwrap();
+        assert_eq!((weekly - now).num_minutes(), (3 * 24 + 4) * 60);
+        assert!(scene(0, now).credits.is_some() && scene(7, now).credits.is_none());
     }
 }

@@ -176,6 +176,28 @@ pub fn countdown(until: DateTime<Utc>, now: DateTime<Utc>) -> String {
     duration(up, false).unwrap_or_else(|| "1m".to_owned())
 }
 
+/// "Renews in 26d 4h", or with `absolute`, "Renews 28 Nov" (local date).
+pub fn renew_text<Z: TimeZone>(renews_at: DateTime<Utc>, now: DateTime<Utc>, absolute: bool, tz: &Z) -> String {
+    let Some(rel) = duration(renews_at - now, false) else { return fl!("renewing-now") };
+    if !absolute {
+        return fl!("renews-in", time = rel);
+    }
+    let r = renews_at.with_timezone(tz);
+    fl!("renews-on", date = format!("{} {}", r.day(), MONTHS[r.month0() as usize]))
+}
+
+/// Cents as dollars: "$37.20", "$0.00".
+pub fn dollars(cents: i64) -> String {
+    let sign = if cents < 0 { "-" } else { "" };
+    let c = cents.abs();
+    format!("{sign}${}.{:02}", c / 100, c % 100)
+}
+
+/// Cents as dollars, without cents when they're zero: "$200", "$37.20".
+pub fn dollars_short(cents: i64) -> String {
+    if cents % 100 == 0 { format!("{}${}", if cents < 0 { "-" } else { "" }, cents.abs() / 100) } else { dollars(cents) }
+}
+
 /// A panel value in a 4-character field: "  4%", " 42%", "100%"; `MAX` at
 /// the limit.
 pub fn pct_cell(value: f32, limit: bool) -> String {
@@ -299,6 +321,23 @@ mod tests {
         assert_eq!(countdown(now() + TimeDelta::seconds(210), now()), "4m");
         assert_eq!(countdown(now() + TimeDelta::seconds(1), now()), "1m");
         assert_eq!(countdown(now() - TimeDelta::seconds(5), now()), "1m");
+    }
+
+    #[test]
+    fn renewals_and_dollars() {
+        let r = |d: TimeDelta, abs: bool| renew_text(now() + d, now(), abs, &Utc);
+        assert_eq!(r(mins((26 * 24 + 4) * 60), false), "Renews in 26d 4h");
+        assert_eq!(r(mins((26 * 24 + 4) * 60), true), "Renews 3 Nov");
+        assert_eq!(r(mins(-1), true), "Renewing now");
+        // The local date, not the UTC one.
+        let tz = FixedOffset::east_opt(11 * 3600).unwrap();
+        assert_eq!(renew_text(now() + mins(13 * 60), now(), true, &tz), "Renews 9 Oct");
+        assert_eq!(dollars(3720), "$37.20");
+        assert_eq!(dollars(0), "$0.00");
+        assert_eq!(dollars(20000), "$200.00");
+        assert_eq!(dollars(-5), "-$0.05");
+        assert_eq!(dollars_short(20000), "$200");
+        assert_eq!(dollars_short(3720), "$37.20");
     }
 
     #[test]

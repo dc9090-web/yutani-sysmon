@@ -20,7 +20,8 @@ use chrono::{DateTime, TimeDelta, Utc};
 use crate::api::{self, Outcome};
 use crate::auth::NoLogin;
 use crate::auth::{self, Account, Auth, Paths};
-use crate::config::{APP_ID, Amount, Config, PanelIcon, PanelStyle, REFRESH_CHOICES, ResetFormat, TIME_APPLET, TimeConfig};
+use crate::config::{APP_ID, Amount, CREDIT_CHOICES, Config, PanelIcon, PanelStyle, REFRESH_CHOICES, ResetFormat, TIME_APPLET, TimeConfig};
+use crate::credits::{self, AdminKey, Cycle, Spend};
 use crate::fl;
 use crate::format::{self, Live};
 use crate::model::{Kind, Snapshot, State, Usage};
@@ -30,13 +31,19 @@ use crate::widgets::avatar::{self, Avatar, Ring};
 use crate::widgets::banner::banner;
 use crate::widgets::header::{Header, header};
 use crate::widgets::panel::{self, Chunk, Look, Value};
-use crate::widgets::row::{self, Ctx, lower_first, name, quota_row};
+use crate::widgets::row::{self, Ctx, credits_row, lower_first, name, quota_row};
 
 /// Height of the panel-icon tiles on the settings page.
 const TILE_HEIGHT: f32 = 80.0;
 
 /// Data older than this isn't shown at all (SPEC §9).
 const DISCARD_AFTER: TimeDelta = TimeDelta::hours(24);
+
+/// libcosmic's popup height limit.
+const POPUP_MAX: f32 = 1000.0;
+/// The settings header, the popup padding and the panel: the settings page
+/// scrolls within what's left of the output.
+const SETTINGS_RESERVE: f32 = 120.0;
 
 /// The robot: the panel icon, the popup header icon and the desktop entry icon.
 const ROBOT: &[u8] = include_bytes!("../resources/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletAiUsage-symbolic.svg");
@@ -58,13 +65,15 @@ pub enum Seg {
     Amount,
     Reset,
     Refresh,
+    Credit,
 }
 
 /// A "Show in panel" toggle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Toggle {
     Window(Kind),
-    SessionReset,
+    Credits,
+    WeeklyReset,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +114,33 @@ pub enum Message {
     Shot(cosmic::iced::window::Screenshot),
     Segment(Seg, Entity),
     CopyDiagnostics,
+    /// The Admin key, read from the keyring at start.
+    KeyLoaded(Option<AdminKey>),
+    KeyInput(String),
+    KeyVisibility,
+    /// Save the typed key, or recheck the saved one, then read the spend.
+    KeyTest,
+    /// The key is in the keyring (or isn't, when there's no keyring).
+    KeySaved(AdminKey, bool),
+    KeyRemove,
+    CreditsFetched(credits::Outcome),
+    RenewDay(u8),
+    /// An output's name and logical height, for the settings page's scroll limit.
+    Output(Option<String>, Option<i32>),
+}
+
+/// How the last cost-report request ended, for the credits row and the
+/// settings caption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CreditsStatus {
+    Unchecked,
+    Checking,
+    Ok,
+    /// 401 / 403: no more requests until the key changes.
+    Rejected,
+    Offline,
+    RateLimited,
+    Unrecognised,
 }
 
 /// What a fetch did to the applet's own login.
@@ -158,6 +194,18 @@ pub struct App {
     amount_model: SingleSelectModel,
     reset_model: SingleSelectModel,
     refresh_model: SingleSelectModel,
+    credit_model: SingleSelectModel,
+    /// The Admin API key for the cost report, from the keyring.
+    admin_key: Option<AdminKey>,
+    key_input: String,
+    key_hidden: bool,
+    /// The key couldn't be saved (no keyring); it's used for this run only.
+    key_unsaved: bool,
+    credits_status: CreditsStatus,
+    /// The last spend read.
+    spend: Option<Spend>,
+    /// The panel's output height, once known.
+    output_height: Option<f32>,
     /// Demo mode: the scene on show.
     #[cfg(feature = "demo")]
     demo: Option<usize>,
@@ -209,6 +257,10 @@ impl App {
         self.account = s.account;
         self.snapshot = s.snapshot;
         self.state = s.state;
+        self.admin_key = s.credits.and_then(|_| AdminKey::new("demo"));
+        self.spend = s.credits.map(|cents| Spend { cents, fetched_at: self.now });
+        self.credits_status = if s.credits.is_some() { CreditsStatus::Ok } else { CreditsStatus::Unchecked };
+        self.config.credit_renew_day = 28;
     }
 
     fn demo(&self) -> bool {
@@ -218,8 +270,99 @@ impl App {
         false
     }
 
-    /// Reads the login (fresh each time) and starts a request if it's usable.
+    /// Usage and, with an Admin key, this cycle's spend.
     fn refresh(&mut self) -> Task<Message> {
+        let credits = self.fetch_credits();
+        let usage = self.refresh_usage();
+        Task::batch([credits, usage])
+    }
+
+    /// Reads the cycle's spend, if there's an Admin key that hasn't been refused.
+    fn fetch_credits(&mut self) -> Task<Message> {
+        if self.demo() || matches!(self.credits_status, CreditsStatus::Checking | CreditsStatus::Rejected) {
+            return Task::none();
+        }
+        let Some(key) = self.admin_key.clone() else { return Task::none() };
+        self.credits_status = CreditsStatus::Checking;
+        let now = Utc::now();
+        let cycle = Cycle::at(self.config.credit_renew_day, now);
+        tracing::debug!(from = %cycle.start, "fetching the cycle's spend");
+        cosmic::task::future(credits::fetch(self.client.clone(), key, cycle, now)).map(|o| cosmic::Action::App(Message::CreditsFetched(o)))
+    }
+
+    fn credits_fetched(&mut self, outcome: credits::Outcome) {
+        let now = Utc::now();
+        self.now = now;
+        self.credits_status = match outcome {
+            credits::Outcome::Spent(cents) => {
+                tracing::debug!(cents, "spend");
+                self.spend = Some(Spend { cents, fetched_at: now });
+                CreditsStatus::Ok
+            }
+            credits::Outcome::Unauthorized => {
+                tracing::warn!("the Admin key was refused; it stays until it's replaced");
+                CreditsStatus::Rejected
+            }
+            credits::Outcome::RateLimited(_) => CreditsStatus::RateLimited,
+            credits::Outcome::Offline => CreditsStatus::Offline,
+            credits::Outcome::Unrecognised(status) => {
+                tracing::warn!(status, "cost report format not recognised");
+                CreditsStatus::Unrecognised
+            }
+        };
+    }
+
+    /// The credits to show: a key, and a spend read in this cycle under a day ago.
+    fn credits_live(&self) -> Option<credits::Live> {
+        self.admin_key.as_ref()?;
+        let s = self.spend.filter(|s| self.now - s.fetched_at <= DISCARD_AFTER)?;
+        let day = self.config.credit_renew_day;
+        let cycle = Cycle::at(day, self.now);
+        (Cycle::at(day, s.fetched_at) == cycle).then_some(credits::Live {
+            spent_cents: s.cents,
+            limit_cents: i64::from(self.config.credit_dollars) * 100,
+            cycle,
+        })
+    }
+
+    /// The spend can't be updated: dim it.
+    fn credits_stale(&self) -> bool {
+        matches!(self.credits_status, CreditsStatus::Rejected | CreditsStatus::Offline | CreditsStatus::RateLimited | CreditsStatus::Unrecognised)
+    }
+
+    /// What replaces the credits row's foot while the key or report is unusable.
+    fn credits_problem(&self) -> Option<(String, Ink)> {
+        match self.credits_status {
+            CreditsStatus::Rejected => Some((fl!("credits-rejected"), Ink::Destructive)),
+            CreditsStatus::Unrecognised => Some((fl!("credits-format"), Ink::Warning)),
+            _ => None,
+        }
+    }
+
+    /// A line in place of the credits row while there's a key but nothing to show.
+    fn credits_note(&self) -> Option<(String, Ink)> {
+        self.admin_key.as_ref()?;
+        match self.credits_status {
+            CreditsStatus::Offline | CreditsStatus::RateLimited => Some((fl!("credits-offline"), Ink::Warning)),
+            CreditsStatus::Rejected | CreditsStatus::Unrecognised => self.credits_problem(),
+            _ => Some((fl!("credits-loading"), Ink::Muted)),
+        }
+    }
+
+    /// The renew day changed: the spend read is for another cycle.
+    fn recycle(&mut self) -> Task<Message> {
+        if self.demo() {
+            return Task::none();
+        }
+        self.spend = None;
+        if self.credits_status != CreditsStatus::Checking {
+            self.credits_status = CreditsStatus::Unchecked;
+        }
+        self.fetch_credits()
+    }
+
+    /// Reads the login (fresh each time) and starts a request if it's usable.
+    fn refresh_usage(&mut self) -> Task<Message> {
         if self.demo() {
             return Task::none();
         }
@@ -321,7 +464,8 @@ impl App {
         }
         // Extra fetches just after each window resets, and when the login expires.
         let resets = self.snapshot.iter().flat_map(|s| s.usage.windows.iter().filter_map(|w| w.resets_at)).map(|t| t + scheduler::AFTER_RESET);
-        let wakeups: Vec<_> = resets.chain(self.expires_at).collect();
+        let renewal = self.admin_key.as_ref().map(|_| Cycle::at(self.config.credit_renew_day, now).end + scheduler::AFTER_RESET);
+        let wakeups: Vec<_> = resets.chain(self.expires_at).chain(renewal).collect();
         let due = self.scheduler.completed(result, now, self.interval(), scheduler::jitter(), wakeups);
         let mut tasks = vec![self.arm(due), self.redraw_at(self.scheduler.unblocks_at(now))];
         if fallback {
@@ -361,6 +505,7 @@ impl App {
         select(&mut self.amount_model, &self.config.amount);
         select(&mut self.reset_model, &self.config.reset_format);
         select(&mut self.refresh_model, &self.config.refresh_minutes);
+        select(&mut self.credit_model, &self.config.credit_dollars);
     }
 
     fn segment(&mut self, seg: Seg, e: Entity) -> Task<Message> {
@@ -378,6 +523,11 @@ impl App {
             Seg::Reset => {
                 if let Some(v) = self.reset_model.data::<ResetFormat>(e).copied() {
                     self.save(|c, h| c.set_reset_format(h, v));
+                }
+            }
+            Seg::Credit => {
+                if let Some(v) = self.credit_model.data::<u16>(e).copied() {
+                    self.save(|c, h| c.set_credit_dollars(h, v));
                 }
             }
             Seg::Refresh => {
@@ -430,7 +580,7 @@ impl App {
         }
     }
 
-    /// The panel's chunks, in the fixed order, then the session countdown.
+    /// The panel's chunks, in the fixed order, the credits, then the weekly countdown.
     fn chunks(&self, vertical_xs: bool) -> Vec<Chunk> {
         let live = self.live();
         let left = self.left();
@@ -446,19 +596,25 @@ impl App {
                 },
             })
             .collect();
-        if self.config.show_session_reset
+        if self.config.show_credits
+            && let Some(c) = self.credits_live()
+        {
+            let tick = c.pace(self.now).map(|p| if left { 100.0 - p.expected } else { p.expected });
+            chunks.push(Chunk { label: fl!("label-credits"), value: Value::Window { shown: c.shown(left), tick, level: c.level() } });
+        }
+        if self.config.show_weekly_reset
             && !vertical_xs
             && !chunks.is_empty()
-            && let Some(s) = live.iter().find(|l| l.kind == Kind::Session)
+            && let Some(w) = live.iter().find(|l| l.kind == Kind::Weekly)
         {
-            chunks.push(Chunk { label: fl!("label-reset"), value: Value::Reset(format::compact_reset(s.resets_at, self.now)) });
+            chunks.push(Chunk { label: fl!("label-reset"), value: Value::Reset(format::compact_reset(w.resets_at, self.now)) });
         }
         chunks
     }
 
-    /// The session ring: the live session % used, or nothing to show.
+    /// The weekly ring: the live weekly % used, or nothing to show.
     fn ring(&self) -> Ring {
-        let used = self.live().iter().find(|l| l.kind == Kind::Session).map(|l| l.used);
+        let used = self.live().iter().find(|l| l.kind == Kind::Weekly).map(|l| l.used);
         Ring { used, stale: self.stale() }
     }
 
@@ -488,7 +644,7 @@ impl App {
         }
         let left = self.left();
         let amount = if left { fl!("left") } else { fl!("used") };
-        let windows: Vec<String> = self
+        let mut windows: Vec<String> = self
             .live()
             .iter()
             .filter(|l| self.enabled(l.kind))
@@ -505,6 +661,17 @@ impl App {
             .collect();
         if windows.is_empty() {
             return if self.state == State::Loading { fl!("a11y-loading") } else { fl!("a11y-signed-out") };
+        }
+        if self.config.show_credits
+            && let Some(c) = self.credits_live()
+        {
+            let renew = format::renew_text(c.cycle.end, self.now, false, &chrono::Local);
+            windows.push(fl!(
+                "a11y-credits",
+                spent = format::dollars_short(c.spent_cents),
+                limit = format::dollars_short(c.limit_cents),
+                renew = lower_first(&renew)
+            ));
         }
         let suffix = match &self.state {
             State::Offline => Some(match self.snapshot.as_ref().and_then(|s| format::ago(self.now - s.fetched_at)) {
@@ -629,6 +796,11 @@ impl App {
         for l in &live {
             col = col.push(quota_row(l, &ctx));
         }
+        if let Some(c) = self.credits_live() {
+            col = col.push(credits_row(&c, &ctx, self.credits_stale(), self.credits_problem()));
+        } else if let Some((text, ink)) = self.credits_note() {
+            col = col.push(widget::container(widget::text::caption(text).class(ink.text())).padding([space_xxs(), space_m()]));
+        }
         if !live.is_empty() && self.no_fable() {
             col = col.push(widget::container(widget::text::caption(fl!("no-fable-limit")).class(Ink::Muted.text())).padding([space_xxs(), space_m()]));
         }
@@ -660,19 +832,83 @@ impl App {
         .into()
     }
 
+    /// The Admin key field with Test and Remove, its status, and the credit settings.
+    fn credits_section(&self) -> Element<'_, Message> {
+        let saved = self.admin_key.is_some();
+        let placeholder = if saved { fl!("admin-key-placeholder-saved") } else { fl!("admin-key-placeholder") };
+        let typed = AdminKey::new(&self.key_input);
+        let checking = self.credits_status == CreditsStatus::Checking;
+        let input = widget::secure_input(placeholder, &self.key_input, Some(Message::KeyVisibility), self.key_hidden)
+            .on_input(Message::KeyInput)
+            .on_submit_maybe(typed.is_some().then_some(|_| Message::KeyTest))
+            .width(Length::Fill);
+        let test = widget::button::standard(fl!("test")).on_press_maybe((!checking && !self.demo() && (typed.is_some() || saved)).then_some(Message::KeyTest));
+        let mut buttons = Row::new().spacing(space_xs()).align_y(Alignment::Center).push(widget::Space::new().width(Length::Fill));
+        if saved {
+            buttons = buttons.push(widget::button::standard(fl!("remove")).on_press_maybe((!self.demo()).then_some(Message::KeyRemove)));
+        }
+        buttons = buttons.push(test);
+        let caption = |text: String, ink: Ink| widget::text::caption(text).class(ink.text());
+        let mut col = Column::new().spacing(space_xxs()).push(input).push(buttons);
+        if typed.is_some() && !credits::looks_valid(&self.key_input) {
+            col = col.push(caption(fl!("admin-key-shape"), Ink::Warning));
+        }
+        let status = match self.credits_status {
+            CreditsStatus::Unchecked => None,
+            CreditsStatus::Checking => Some((fl!("checking"), Ink::Muted)),
+            CreditsStatus::Ok => Some((fl!("key-works"), Ink::Success)),
+            CreditsStatus::Rejected => Some((fl!("key-invalid"), Ink::Destructive)),
+            CreditsStatus::Offline => Some((fl!("key-offline"), Ink::Muted)),
+            CreditsStatus::RateLimited => Some((fl!("key-rate-limited"), Ink::Muted)),
+            CreditsStatus::Unrecognised => Some((fl!("key-format"), Ink::Warning)),
+        };
+        if saved && let Some((text, ink)) = status {
+            col = col.push(caption(text, ink));
+        }
+        if self.key_unsaved {
+            col = col.push(caption(fl!("key-no-keyring"), Ink::Warning));
+        }
+        col = col.push(caption(fl!("admin-key-tip"), Ink::Muted));
+        let credit = widget::segmented_control::horizontal(&self.credit_model)
+            .button_padding([space_xxxs(), 0, space_xxxs(), 0])
+            .on_activate(|e| Message::Segment(Seg::Credit, e));
+        let amount = Row::new()
+            .spacing(space_xs())
+            .align_y(Alignment::Center)
+            .push(widget::text::body(fl!("monthly-credit")).width(Length::Fill))
+            .push(widget::container(credit).width(Length::Fixed(160.0)));
+        // The spin button's label is the number it shows.
+        let day = self.config.credit_renew_day;
+        let renew = Row::new()
+            .spacing(space_xs())
+            .align_y(Alignment::Center)
+            .push(widget::text::body(fl!("renew-day")).width(Length::Fill))
+            .push(widget::spin_button(day.to_string(), day, 1u8, 1u8, 31u8, Message::RenewDay));
+        col = col.push(widget::container(amount).padding([space_xxs(), 0, 0, 0])).push(renew);
+        applet::padded_control(col).into()
+    }
+
     fn settings_page(&self) -> Element<'_, Message> {
-        let windows_on = Kind::ALL.iter().filter(|k| self.enabled(**k)).count();
+        // The Session toggle only while the plan still has that window.
+        let has_session = self.usage().is_some_and(|u| u.get(Kind::Session).is_some());
+        let listed: Vec<Kind> = Kind::ALL.into_iter().filter(|k| *k != Kind::Session || has_session).collect();
+        let windows_on = listed.iter().filter(|k| self.enabled(**k)).count();
         let mut toggles = Column::new();
-        let rows = [
-            (Toggle::Window(Kind::Session), name(Kind::Session), fl!("session-desc")),
-            (Toggle::Window(Kind::Weekly), name(Kind::Weekly), fl!("toggle-weekly-desc")),
-            (Toggle::Window(Kind::Fable), name(Kind::Fable), fl!("toggle-fable-desc")),
-            (Toggle::SessionReset, fl!("session-reset"), fl!("session-reset-desc")),
-        ];
+        let mut rows = Vec::new();
+        if has_session {
+            rows.push((Toggle::Window(Kind::Session), name(Kind::Session), fl!("session-desc")));
+        }
+        rows.push((Toggle::Window(Kind::Weekly), name(Kind::Weekly), fl!("toggle-weekly-desc")));
+        rows.push((Toggle::Window(Kind::Fable), name(Kind::Fable), fl!("toggle-fable-desc")));
+        if self.admin_key.is_some() {
+            rows.push((Toggle::Credits, fl!("credits"), fl!("toggle-credits-desc")));
+        }
+        rows.push((Toggle::WeeklyReset, fl!("weekly-reset"), fl!("weekly-reset-desc")));
         for (t, title, caption) in rows {
             let checked = match t {
                 Toggle::Window(k) => self.enabled(k),
-                Toggle::SessionReset => self.config.show_session_reset,
+                Toggle::Credits => self.config.show_credits,
+                Toggle::WeeklyReset => self.config.show_weekly_reset,
             };
             let last = matches!(t, Toggle::Window(_)) && checked && windows_on == 1;
             let unavailable = t == Toggle::Window(Kind::Fable) && self.no_fable();
@@ -738,10 +974,12 @@ impl App {
             );
         }
         let note = if self.config.icon == PanelIcon::Robot { fl!("icon-note-symbolic") } else { fl!("icon-note-avatar") };
-        Column::new()
-            .push(ui::back_header(fl!("applet-settings"), fl!("back"), Message::Page(Page::Main)))
+        let body = Column::new()
             .push(ui::group_label(fl!("account")))
             .push(self.account_row())
+            .push(ui::inset_divider())
+            .push(ui::group_label(fl!("api-credits")))
+            .push(self.credits_section())
             .push(ui::inset_divider())
             .push(ui::group_label(fl!("panel-icon")))
             .push(applet::padded_control(Column::new().spacing(space_xxs()).push(tiles).push(widget::text::caption(note).class(Ink::Muted.text()))))
@@ -759,7 +997,12 @@ impl App {
             .push(seg(&self.reset_model, Seg::Reset))
             .push(ui::inset_divider())
             .push(ui::group_label(fl!("refresh-every")))
-            .push(seg(&self.refresh_model, Seg::Refresh))
+            .push(seg(&self.refresh_model, Seg::Refresh));
+        // The popup is at most 1000 px tall, and the output may be shorter.
+        let limit = (self.output_height.unwrap_or(POPUP_MAX).min(POPUP_MAX) - SETTINGS_RESERVE).max(240.0);
+        Column::new()
+            .push(ui::back_header(fl!("applet-settings"), fl!("back"), Message::Page(Page::Main)))
+            .push(widget::container(widget::scrollable(body)).max_height(limit))
             .into()
     }
 }
@@ -825,6 +1068,20 @@ impl cosmic::Application for App {
                 }
                 m
             },
+            credit_model: {
+                let mut m = segmented_button::Model::builder().build();
+                for n in CREDIT_CHOICES {
+                    m.insert().text(fl!("credit-amount", n = n)).data(n);
+                }
+                m
+            },
+            admin_key: None,
+            key_input: String::new(),
+            key_hidden: true,
+            key_unsaved: false,
+            credits_status: CreditsStatus::Unchecked,
+            spend: None,
+            output_height: None,
         };
         let mut app = app;
         app.sync_models();
@@ -845,7 +1102,9 @@ impl cosmic::Application for App {
             }
             return (app, Task::none());
         }
-        (app, cosmic::task::future(oauth::load()).map(|s| cosmic::Action::App(Message::SessionLoaded(s))))
+        let load_session = cosmic::task::future(oauth::load()).map(|s| cosmic::Action::App(Message::SessionLoaded(s)));
+        let load_key = cosmic::task::future(credits::load()).map(|k| cosmic::Action::App(Message::KeyLoaded(k)));
+        (app, Task::batch([load_session, load_key]))
     }
 
     fn on_close_requested(&self, id: Id) -> Option<Message> {
@@ -906,12 +1165,18 @@ impl cosmic::Application for App {
                 if c != self.config {
                     tracing::debug!(config = ?c, "config changed");
                     let retime = c.refresh_minutes != self.config.refresh_minutes;
+                    let recycle = c.credit_renew_day != self.config.credit_renew_day;
                     self.config = c;
                     self.sync_models();
+                    let mut tasks = Vec::new();
                     if retime {
                         let due = self.scheduler.retime(Utc::now(), self.interval(), scheduler::jitter());
-                        return self.arm(due);
+                        tasks.push(self.arm(due));
                     }
+                    if recycle {
+                        tasks.push(self.recycle());
+                    }
+                    return Task::batch(tasks);
                 }
             }
             Message::Page(p) => self.page = p,
@@ -993,7 +1258,8 @@ impl cosmic::Application for App {
                 Toggle::Window(Kind::Session) => self.save(|c, h| c.set_show_session(h, on)),
                 Toggle::Window(Kind::Weekly) => self.save(|c, h| c.set_show_weekly(h, on)),
                 Toggle::Window(Kind::Fable) => self.save(|c, h| c.set_show_fable(h, on)),
-                Toggle::SessionReset => self.save(|c, h| c.set_show_session_reset(h, on)),
+                Toggle::Credits => self.save(|c, h| c.set_show_credits(h, on)),
+                Toggle::WeeklyReset => self.save(|c, h| c.set_show_weekly_reset(h, on)),
             },
             Message::Segment(seg, e) => return self.segment(seg, e),
             Message::Icon(i) => self.save(|c, h| c.set_icon(h, i)),
@@ -1029,6 +1295,62 @@ impl cosmic::Application for App {
                     return self.refresh();
                 }
             }
+            Message::KeyLoaded(k) => {
+                tracing::debug!(saved = k.is_some(), "admin key loaded");
+                self.admin_key = k;
+                return self.fetch_credits();
+            }
+            Message::KeyInput(s) => self.key_input = s,
+            Message::KeyVisibility => self.key_hidden = !self.key_hidden,
+            Message::KeyTest => {
+                if self.credits_status == CreditsStatus::Checking {
+                    return Task::none();
+                }
+                // A typed key is saved, then checked; with nothing typed, Test rereads with the saved one.
+                let Some(k) = AdminKey::new(&self.key_input) else {
+                    self.credits_status = CreditsStatus::Unchecked;
+                    return self.fetch_credits();
+                };
+                self.credits_status = CreditsStatus::Checking;
+                return cosmic::task::future(async move {
+                    let saved = credits::save(&k).await;
+                    Message::KeySaved(k, saved)
+                });
+            }
+            Message::KeySaved(k, saved) => {
+                tracing::debug!(saved, "admin key set");
+                self.key_unsaved = !saved;
+                self.admin_key = Some(k);
+                self.key_input.clear();
+                self.spend = None;
+                self.credits_status = CreditsStatus::Unchecked;
+                return self.fetch_credits();
+            }
+            Message::KeyRemove => {
+                tracing::info!("admin key removed");
+                self.admin_key = None;
+                self.spend = None;
+                self.key_unsaved = false;
+                self.credits_status = CreditsStatus::Unchecked;
+                return cosmic::task::future(async {
+                    credits::forget().await;
+                    Message::Tick
+                });
+            }
+            Message::CreditsFetched(o) => self.credits_fetched(o),
+            Message::RenewDay(d) => {
+                if d != self.config.credit_renew_day {
+                    self.save(|c, h| c.set_credit_renew_day(h, d));
+                    return self.recycle();
+                }
+            }
+            Message::Output(name, height) => {
+                if name.as_deref() == Some(self.core.applet.output_name.as_str())
+                    && let Some(h) = height
+                {
+                    self.output_height = Some(h as f32);
+                }
+            }
             Message::Escape => {
                 if self.page == Page::Settings {
                     self.page = Page::Main;
@@ -1056,9 +1378,15 @@ impl cosmic::Application for App {
     }
 }
 
+/// Esc, and the outputs' sizes (for scrolling the settings on short screens).
 fn escape() -> Subscription<Message> {
+    use cosmic::iced::event::{PlatformSpecific, wayland};
     cosmic::iced::event::listen_with(|event, _, _| match event {
         cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key: keyboard::Key::Named(Named::Escape), .. }) => Some(Message::Escape),
+        cosmic::iced::Event::PlatformSpecific(PlatformSpecific::Wayland(wayland::Event::Output(
+            wayland::OutputEvent::Created(Some(info)) | wayland::OutputEvent::InfoUpdate(info),
+            _,
+        ))) => Some(Message::Output(info.name.clone(), info.logical_size.map(|s| s.1))),
         _ => None,
     })
 }
@@ -1122,8 +1450,9 @@ fn label(kind: Kind) -> String {
 
 #[cfg(test)]
 mod tests {
-    const SOURCES: [&str; 8] = [
+    const SOURCES: [&str; 9] = [
         include_str!("app.rs"),
+        include_str!("credits.rs"),
         include_str!("format.rs"),
         include_str!("widgets/banner.rs"),
         include_str!("widgets/header.rs"),

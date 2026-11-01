@@ -7,9 +7,9 @@
 
 <br>
 
-**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD, Intel or NVIDIA GPU, memory and disk at a glance; your Claude usage limits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
+**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD, Intel or NVIDIA GPU, memory and disk at a glance; your Claude usage limits and monthly API credits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
 
-The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one small HTTPS request every few minutes, with its own Claude sign-in (kept in the system keyring) or Claude Code's existing login, which it never modifies. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
+The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one or two small HTTPS requests every few minutes, with its own Claude sign-in (kept in the system keyring) or Claude Code's existing login, which it never modifies, plus an optional Admin API key for your plan's API credits. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
 
 [![Rust](https://img.shields.io/badge/Rust-2024-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![COSMIC](https://img.shields.io/badge/COSMIC-1.10-3b82f6)](https://system76.com/cosmic)
@@ -22,7 +22,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 [![OpenWeather](https://img.shields.io/badge/OpenWeather-your_own_key-eb6e4b)](https://openweathermap.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-green)](LICENSE)
 
-<img src="docs/screenshots/panel.png" alt="The COSMIC top panel: the AI Usage Cyborg avatar with its session ring and 5h, Week and Fable bars; System Monitor showing CPU 9 %, GPU 9 %, RAM 29 %; and Network Traffic showing a sparkline and RX/TX rates" width="962">
+<img src="docs/screenshots/panel.png" alt="The COSMIC top panel: the AI Usage Cyborg avatar with its ring and 5h, Week and Fable bars; System Monitor showing CPU 9 %, GPU 9 %, RAM 29 %; and Network Traffic showing a sparkline and RX/TX rates" width="962">
 
 *An S top panel: AI Usage (with the Cyborg · cyan icon), System Monitor and Network Traffic, left to right. Values stay centred and the width never moves.*
 
@@ -36,7 +36,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | --- | --- | --- |
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
 | 🖥️ | **System Monitor** | CPU, AMD, Intel or NVIDIA GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
-| 🤖 | **AI Usage** | Claude's Session (5-hour), Weekly and Fable limits as small bars in the panel, with reset times and pace in the popup. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
+| 🤖 | **AI Usage** | Claude's Weekly and Fable limits (and the 5-hour Session, on plans that still have one) as small bars in the panel, with reset times and pace in the popup, plus this month's spend of the API credits that come with Max, Ultra and Team plans. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
 | 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
 
@@ -55,7 +55,7 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 👁️ | **Only what's on screen** | Clocks, VRAM, GPU power and NVMe temps are read only while the popup shows them. The panel needs about 8 small reads a second (on Intel, plus one per GPU client). |
 | 💤 | **Never wakes a sleeping GPU** | A runtime-suspended dGPU reads as idle without touching its sensors, so laptops stay in D3cold. |
 | 🧵 | **Single-thread executor** | One 1 Hz timer per system applet. Rates come from monotonic `Instant` deltas, never an assumed second. AI Usage sleeps until its next request and redraws its countdowns every 30 s. |
-| 🌐 | **Anthropic only, no telemetry** | AI Usage talks only to Anthropic over rustls (`api.anthropic.com`, plus `platform.claude.com` to renew its own sign-in) and caches no usage on disk. Its own login lives in the keyring; Claude Code's token is held only for the length of a request. |
+| 🌐 | **Anthropic only, no telemetry** | AI Usage talks only to Anthropic over rustls (`api.anthropic.com`, plus `platform.claude.com` to renew its own sign-in) and caches no usage or spend on disk. Its own login and the optional Admin API key live in the keyring; Claude Code's token is held only for the length of a request. |
 | 🗝️ | **Key in the keyring** | Weather keeps your OpenWeather key in the Secret Service keyring (a 0600 file only if there's none), never in config or logs, and talks only to `api.openweathermap.org`. |
 | 🔑 | **Hands off your login** | AI Usage has its own Claude sign-in that renews itself, and opens Claude Code's credentials read-only, so it can't log Claude Code out. |
 | 🔒 | **No privileges, except one helper** | The applets never call `sudo` or `pkexec` or write to sysfs; root-only counters show `—`. The one exception is VPN's torrent tunnel: a small D-Bus-activated root helper, sandboxed by systemd and guarded by polkit, that only builds the namespace and starts qBittorrent in it. |
@@ -66,7 +66,7 @@ Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the s
 | --- | --- | --- |
 | Network Traffic | ~0.1 % of one core | 25.0 MB |
 | System Monitor | ~0.1 % of one core | 24.7 MB |
-| AI Usage | ~0.1 % of one core (one request every 5 min) | 31.2 MB |
+| AI Usage | ~0.1 % of one core (one or two requests every 5 min) | 31.2 MB |
 | Weather | idle between refreshes (one city every 30 min) | 32.7 MB |
 | VPN | ~0.1 % of one core (both tunnels off) | 30.5 MB |
 | *stock COSMIC clock applet* | – | 28.8 MB |
@@ -148,27 +148,28 @@ The applet picks it up within 30 s, with no restart. To undo it, delete the rule
 ## 🤖 AI Usage
 
 <div align="center">
-<img src="docs/screenshots/ai-usage-popup.png" alt="AI Usage popup with the Cyborg avatar and its session ring in the header: Claude, Max plan, dc@example.com, updated 2m ago; Session 42 % used, resets in 2h 12m, 14 % under pace; Weekly 61 % used, 6 % ahead of pace; Fable 84 % used in the warning colour, 29 % ahead of pace" width="359">
+<img src="docs/screenshots/ai-usage-popup.png" alt="AI Usage popup with the Cyborg avatar and its weekly ring in the header: Claude, Ultra plan, dc@example.com, updated 2m ago; Weekly 76 % used, resets in 3d 4h; Fable 48 % used; API credits $37.20 of $200, renews in 26d, 5 % ahead of pace" width="359">
 &nbsp;&nbsp;
-<img src="docs/screenshots/ai-usage-settings.png" alt="AI Usage settings: Panel icon tiles for Robot, Cyborg · cyan (selected) and Cyborg · red; Show in panel togglers for Session, Weekly, Fable and Session reset; Panel style, Show, Reset times and Refresh every segmented controls" width="359">
+<img src="docs/screenshots/ai-usage-settings.png" alt="AI Usage settings: Account, an API credits group with the Admin key field, Test and Remove, Monthly credit $100 / $200 and Renews on day; Panel icon tiles for Robot, Cyborg · cyan (selected) and Cyborg · red; Show in panel togglers for Weekly, Fable, API credits and Weekly reset; Panel style, Show, Reset times and Refresh every segmented controls" width="359">
 </div>
 
 <div align="center">
-<img src="docs/screenshots/ai-usage-limit.png" alt="AI Usage at the limit: Session and Fable at 100 % in the destructive colour with Limit reached and their reset times; Weekly 88 % in the warning colour" width="359">
+<img src="docs/screenshots/ai-usage-limit.png" alt="AI Usage at the limit: Session and Fable at 100 % in the destructive colour with Limit reached and their reset times; Weekly 88 % in the warning colour; API credits used up at $205.10 of $200" width="359">
 &nbsp;&nbsp;
 <img src="docs/screenshots/ai-usage-expired.png" alt="AI Usage with an expired login: a Claude Code login expired banner above dimmed rows, and Updated 3h ago in the warning colour" width="359">
 </div>
 
 *Screenshots use the demo data (`just demo`), not a real account.*
 
-An icon, then one small bar per window: **5h** (Session), **Week** and **Fable**, in that order. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 2h 13m" or "Resets Sat 9:00 AM") and pace ("14% under pace").
+An icon, then one small bar per window: **Week**, **Fable** and, with an Admin key, **API** (this month's credits), in that order; plans that still have the 5-hour Session window get a **5h** bar first. Each bar fills with your accent colour, turns to the warning colour at 80 % and the destructive colour at 100 %, and carries a tick where even spending would put you. The popup lists each window with its percentage, reset time ("Resets in 3d 4h" or "Resets Sat 9:00 AM") and pace ("14% under pace").
 
-- 🤖 **Panel icon:** the symbolic **Robot** (default), or a full-colour **Cyborg** avatar (cyan or red) wrapped in a **session ring**: a fuel gauge of the 5-hour window's % *left*, drawn from 12 o'clock, accent → warning at 80 % used, and a full destructive ring at the limit. The ring ignores the Used/Left setting and dims when data is stale. Avatars need panel size S or larger; at XS the Robot shows.
-- 🎚️ **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the 5-hour window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
+- 🤖 **Panel icon:** the symbolic **Robot** (default), or a full-colour **Cyborg** avatar (cyan or red) wrapped in a **weekly ring**: a fuel gauge of the 7-day window's % *left*, drawn from 12 o'clock, accent → warning at 80 % used, and a full destructive ring at the limit. The ring ignores the Used/Left setting and dims when data is stale. Avatars need panel size S or larger; at XS the Robot shows.
+- 🎚️ **Panel style:** Bars (default), Percent or Both; show **Used** or **Left**; optionally a **Reset** countdown for the weekly window. At 100 % the value reads `MAX` and the bar is solid, so the limit doesn't rely on colour.
+- 💳 **API credits:** Max, Ultra and Team plans include monthly Claude Platform credits ($100, $200, or pooled for teams). Anthropic doesn't expose that balance to a Claude login, so the applet shows this billing cycle's API spend against the credit instead, read from the Admin API cost report: paste an **Admin API key** (from platform.claude.com/settings/admin-keys; the Console account must be an organisation, not an individual account) under Settings → API credits, pick **$100** or **$200**, and set the day of the month your credits **renew**. The popup row reads "$37.20 of $200 · Renews in 26d 4h · 5% ahead of pace" and turns destructive at "Credits used up". The key lives in the keyring; the spend lags Anthropic by about five minutes and counts any purchased credits spent in the same cycle too.
 - 🔑 **Login:** **Sign in** (popup banner, or Settings → Account) opens claude.ai in your browser. The applet then has a login of its own, kept in the system keyring and renewed before it expires, so it keeps working when you use Claude elsewhere and never run `claude` on this computer. Without it, the applet reads Claude Code's login (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`) and **never writes, refreshes or rotates it**; when that login expires, run `claude` once or sign in here. The sign-in uses Claude Code's public OAuth client and asks only for `user:profile`; like the usage endpoint, it's undocumented and could change.
-- 🌐 **Network:** one `GET https://api.anthropic.com/api/oauth/usage` every 1, 5 or 15 minutes (±10 % jitter), on opening the popup if the data is over a minute old, and just after each window resets. It backs off while offline and honours `Retry-After`. No telemetry and no usage cache on disk.
+- 🌐 **Network:** one `GET https://api.anthropic.com/api/oauth/usage` every 1, 5 or 15 minutes (±10 % jitter), on opening the popup if the data is over a minute old, and just after each window resets, plus one `GET /v1/organizations/cost_report` for the cycle when an Admin key is saved. It backs off while offline and honours `Retry-After`. No telemetry and no usage cache on disk.
 - 🧪 **Undocumented endpoint:** if its format changes, the popup says "Usage format not recognised" and **Copy diagnostics** copies the HTTP status and the JSON key names only, never values or the token.
-- 🚦 **States:** not signed in, login expired, offline, rate limited, format not recognised and no Fable limit each have their own banner or header text; stale values are dimmed.
+- 🚦 **States:** not signed in, login expired, offline, rate limited, format not recognised and no Fable limit each have their own banner or header text; stale values are dimmed. A refused Admin key says so on the credits row and stops the cost requests until it's replaced.
 - 🕒 **Clock time** follows the COSMIC time applet's 12/24-hour setting.
 
 `just demo` runs the popup in a window, cycling through every state every 10 s from the test fixtures, with no login and no network (`AI_USAGE_DEMO_SCENE=n` starts on scene *n*; `AI_USAGE_DEMO_ICON=cyan|red` shows an avatar without saving it; `AI_USAGE_SHOT=file.pam` saves the window and exits, which is how the screenshots above were made).
@@ -320,7 +321,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | --- | --- | --- |
 | Network Traffic | `~/.config/cosmic/io.github.dc.CosmicAppletNetTraffic/v1/` | `mode`, `indicator`, `adapter` |
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
-| AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_session`, `show_weekly`, `show_fable`, `show_session_reset`, `style`, `amount`, `reset_format`, `refresh_minutes` |
+| AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_session`, `show_weekly`, `show_fable`, `show_credits`, `show_weekly_reset`, `style`, `amount`, `reset_format`, `refresh_minutes`, `credit_dollars`, `credit_renew_day` (the Admin key is in the keyring, never here) |
 | VPN | `~/.config/cosmic/io.github.dc.CosmicAppletVpn/v1/` | `p2p_conf`, `web_conf`, `web_nm_uuid`, `launch_qbit`, `quit_qbit`, `auto_port`, `webui_port`, `webui_user`, `show_port`, `show_p2p_off`, `show_web_off`, `restore`, `last_p2p`, `last_web`, `qbit_command`, `icon_style` (no keys or passwords) |
 | Weather | `~/.config/cosmic/io.github.dc.CosmicAppletWeather/v1/` | `locations`, `panel_location`, `units`, `icon_set`, `show_city`, `show_hilo`, `refresh_minutes` (the API key is in the keyring, never here) |
 

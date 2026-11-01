@@ -35,10 +35,10 @@ Run every check in **dark and light**, at panel sizes XS, S and M, on a horizont
 
 - [ ] I-01: The "Panel icon" setting switches between Robot, Cyborg · cyan and Cyborg · red live. The choice persists.
 - [ ] I-02: The avatars render at the non-symbolic size for each panel size (32 / 40 / 48 / 56) and look sharp at 1× and 2× scaling. At XS they fall back to the Robot.
-- [ ] I-03: The ring arc equals the session % left. Use the demo slider, or the fixtures: 42% used → 58% arc in the accent; 87% → 13% arc in warning; 100% → full destructive ring.
+- [ ] I-03: The ring arc equals the weekly % left (the session % until 2026-11-01). Use the demo slider, or the fixtures: 42% used → 58% arc in the accent; 87% → 13% arc in warning; 100% → full destructive ring.
 - [ ] I-04: The ring ignores the Used/Left setting.
 - [ ] I-05: Stale data dims the arc to 45%. Not signed in shows the track only.
-- [ ] I-06: The tooltip and accessible name include "Session N% left" or "Session limit reached".
+- [ ] I-06: The tooltip and accessible name include "Week N% left" or "Weekly limit reached".
 
 ## Popup
 

@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-applet-ai-usage"
-description = "COSMIC panel applet: Claude session, weekly and Fable usage limits with reset times"
+description = "COSMIC panel applet: Claude weekly and Fable usage limits with reset times, and the plan's monthly API credits"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

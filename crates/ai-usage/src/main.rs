@@ -5,6 +5,7 @@ mod api;
 mod app;
 mod auth;
 mod config;
+mod credits;
 #[cfg(feature = "demo")]
 mod demo;
 mod format;

@@ -33,7 +33,7 @@ This applet is a sibling of the Network Traffic and System Monitor applets. If t
 - **The endpoint is undocumented.** Keep it isolated in `api.rs`. Unknown shapes go to the "Format not recognised" state, never a panic.
 - **Theme values come from `theme.cosmic()`.** The quota fill is the user's accent (`cosmic.accent`); the warning and limit colours are `cosmic.warning` / `cosmic.destructive`.
 - **Window order is fixed:** Session, Weekly, Fable. The chosen icon (Robot or a Cyborg avatar) always comes first in the panel.
-- **Avatar ring = Session % left**, always (SPEC §7.1). Use pre-scaled PNGs; never scale at runtime below the nearest size.
+- **Avatar ring = Weekly % left**, always (SPEC §7.1; it was the Session window until Claude dropped that window in 2026-11). Use pre-scaled PNGs; never scale at runtime below the nearest size.
 - **The panel width never changes as values change.** Use the mono font and fixed-width fields.
 - **No I/O in `view`.** Use a scheduler subscription, and a 30 s local tick for countdowns.
 - Unit-test `format.rs` (every example in SPEC §6), `api.rs` (every fixture) and `auth.rs` (every fake home).

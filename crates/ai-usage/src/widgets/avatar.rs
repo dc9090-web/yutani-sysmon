@@ -1,4 +1,4 @@
-//! The Cyborg avatars and their session ring (SPEC §7.1, DESIGN §2b).
+//! The Cyborg avatars and their weekly ring (SPEC §7.1, DESIGN §2b).
 
 use std::cell::Cell;
 use std::f32::consts::{FRAC_PI_2, TAU};
@@ -58,7 +58,7 @@ pub fn geometry(size: f32) -> (f32, f32, f32) {
     (stroke, gap, size - 2.0 * (stroke + gap))
 }
 
-/// What the ring shows. `used` is the session % used; `None` draws the track only.
+/// What the ring shows. `used` is the weekly % used; `None` draws the track only.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ring {
     pub used: Option<f32>,
@@ -76,7 +76,7 @@ impl Ring {
         })
     }
 
-    /// "Session 58% left", "Session limit reached", "Session: no data".
+    /// "Week 58% left", "Weekly limit reached", "Weekly: no data".
     pub fn label(&self) -> String {
         match self.used {
             None => crate::fl!("ring-no-data"),
@@ -91,7 +91,7 @@ struct Program {
     stroke: f32,
 }
 
-/// What a drawing depends on: session used (hundredths), stale, track and arc colours.
+/// What a drawing depends on: weekly used (hundredths), stale, track and arc colours.
 type Key = (Option<u32>, bool, [u8; 4], [u8; 4]);
 
 /// The cache and what it was drawn for. It's redrawn only when that changes.
@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn arc_is_session_left() {
+    fn arc_is_weekly_left() {
         let r = |used| Ring { used: Some(used), stale: false }.arc().unwrap();
         assert_eq!(r(42.0), (0.58, Ink::Accent, false));
         let (f, ink, full) = r(87.0);
@@ -174,9 +174,9 @@ mod tests {
 
     #[test]
     fn labels() {
-        assert_eq!(Ring { used: Some(42.0), stale: false }.label(), "Session 58% left");
-        assert_eq!(Ring { used: Some(100.0), stale: true }.label(), "Session limit reached");
-        assert_eq!(Ring { used: None, stale: false }.label(), "Session: no data");
+        assert_eq!(Ring { used: Some(42.0), stale: false }.label(), "Week 58% left");
+        assert_eq!(Ring { used: Some(100.0), stale: true }.label(), "Weekly limit reached");
+        assert_eq!(Ring { used: None, stale: false }.label(), "Weekly: no data");
     }
 
     #[test]

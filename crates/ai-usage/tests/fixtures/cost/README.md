@@ -1,0 +1,1 @@
+Sample Admin API cost-report responses (`GET https://api.anthropic.com/v1/organizations/cost_report`, `bucket_width=1d`) for the credits parser. `amount` is a decimal string in cents, as the Usage and Cost API documents. `paged.json` is a first page with more to come.

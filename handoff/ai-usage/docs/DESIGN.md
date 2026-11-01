@@ -29,7 +29,7 @@ The general UI tokens (`bg`, `on-bg`, `on-bg-muted`, `bg-component`, dividers, m
 - **Applet list:** the desktop entry `Icon=`.
 - **Don't** tint it by state, animate it, or replace it with a provider logo.
 
-## 2b. Avatar icons and the session ring
+## 2b. Avatar icons and the weekly ring (the session ring until 2026-11-01)
 
 - **Files:** `resources/icons/avatars/ai-usage-cyborg-{cyan,red}-{24,32,40,48,56,64,80,96,112,128}.png`, cropped from DC's illustrations. They're round, with transparent corners and no ring.
 - **Size:** the non-symbolic panel icon size. The ring is drawn inside that box:
@@ -42,7 +42,7 @@ The general UI tokens (`bg`, `on-bg`, `on-bg-muted`, `bg-component`, dividers, m
 | L | 48 | 3 | 2 | 38 |
 | XL | 56 | 4 | 2 | 44 |
 
-- **Ring:** the track is `meter-track`. The arc is the session % **left**, from 12 o'clock clockwise, in `quota-fill`, then `quota-warn` at ≥ 80% used. At 100% used it's a full `quota-full` ring.
+- **Ring:** the track is `meter-track`. The arc is the weekly % **left**, from 12 o'clock clockwise, in `quota-fill`, then `quota-warn` at ≥ 80% used. At 100% used it's a full `quota-full` ring.
 - **Why a full ring at the limit:** a drained ring would show only the track. A full red ring is a different shape from "almost empty", which also gets around the near-identical warning and destructive colours in dark mode.
 - **Popup header:** 32px box (stroke 2, gap 1).
 - **Settings tiles:** 40px icons.

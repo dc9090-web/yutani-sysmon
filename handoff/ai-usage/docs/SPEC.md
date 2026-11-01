@@ -133,9 +133,9 @@ Claude Code's access token lasts about 8 hours and is renewed only when `claude`
 - **Build:** `button::custom(row![robot, chunks…].spacing(space_xs).align_y(Center)).class(Button::AppletIcon)`, padded with `core.applet.suggested_padding(true)`, inside `core.applet.autosize_window`.
 - **Leading icon:** always first. Setting `icon`; default `Robot`.
   - **Robot:** sized to `core.applet.suggested_size(true)`, `.symbolic(true)`, no ring.
-  - **Cyborg (cyan or red):** a full-colour avatar at `core.applet.suggested_size(false)` (24 / 32 / 40 / 48 / 56 for XS–XL), with the **session ring** (§7.1). Pick the pre-scaled PNG for the size (×2 on HiDPI); never `.symbolic(true)`.
+  - **Cyborg (cyan or red):** a full-colour avatar at `core.applet.suggested_size(false)` (24 / 32 / 40 / 48 / 56 for XS–XL), with the **weekly ring** (§7.1). Pick the pre-scaled PNG for the size (×2 on HiDPI); never `.symbolic(true)`.
   - **At panel size XS,** an avatar setting falls back to the Robot.
-- **Chunks:** one per enabled window, **in the order Session, Weekly, Fable**, then the optional `Reset` chunk (the session countdown, compact form, 5-character field).
+- **Chunks:** one per enabled window, **in the order Session, Weekly, Fable**, then `API` (the month's credits, §8.3) and the optional `Reset` chunk (the weekly countdown, compact form, 5-character field). *(Updated 2026-11-01: the ring and the Reset chunk followed the Session window until Claude removed it from plans; Session chunks still show when the endpoint returns the window.)*
 - **Styles** (setting `style`; default **Bars**):
   - **Percent:** `column![label, value]`, with the value right-aligned in a 4-character field.
   - **Bars:** `column![label, bar 32×6 + pace tick]`.
@@ -150,7 +150,7 @@ Claude Code's access token lasts about 8 hours and is renewed only when `claude`
 - **Tooltip and accessible name:** "Session 42% used, resets in 2h 13m; Weekly 61% used, resets in 3d 4h; Fable 84% used, resets in 3d 4h", plus a state suffix ("· offline, updated 25m ago").
 - **Click:** toggles the popup.
 
-### 7.1 Session ring (avatar icons only)
+### 7.1 Weekly ring (avatar icons only; the session ring until 2026-11-01)
 
 - **Build:** `stack![image(avatar), canvas(ring)]`. For an icon box of `size` px:
   - stroke = `max(2, round(size × 0.07))`
@@ -158,12 +158,12 @@ Claude Code's access token lasts about 8 hours and is renewed only when `claude`
   - image diameter = `size − 2 × (stroke + gap)`
   - ring radius = `(size − stroke) / 2`
 - **Track:** a full circle in `background.component.base`.
-- **Arc:** starts at 12 o'clock and runs clockwise. Its length is **Session % left** = 100 − used, **regardless of the Used/Left setting** (the ring is a fuel gauge). Round caps.
+- **Arc:** starts at 12 o'clock and runs clockwise. Its length is **Weekly % left** = 100 − used, **regardless of the Used/Left setting** (the ring is a fuel gauge). Round caps.
 - **Colour:** `accent` while used < 80, `warning` at 80–99. At 100 the ring is **full** and `destructive`, with butt caps.
 - **Stale** (offline, rate limited, login expired): the arc at 45% opacity.
-- **No data** (not signed in, format not recognised, no `five_hour`): track only.
-- **Tooltip and accessible name:** "Session 58% left" / "Session limit reached" / "Session: no data". Append this to the button's main tooltip.
-- **Redraw** only when the session used % or the stale flag changes. The canvas cache must not redraw every frame.
+- **No data** (not signed in, format not recognised, no `seven_day`): track only.
+- **Tooltip and accessible name:** "Week 58% left" / "Weekly limit reached" / "Weekly: no data". Append this to the button's main tooltip.
+- **Redraw** only when the weekly used % or the stale flag changes. The canvas cache must not redraw every frame.
 
 ## 8. Popup
 
@@ -171,20 +171,21 @@ Claude Code's access token lasts about 8 hours and is renewed only when `claude`
 
 ### 8.1 Main page
 
-1. **Header:** the chosen icon (Robot 20px; avatars 32px with the session ring), "Claude" (`text::heading`) and a plan chip, with the email (caption) under them. On the right, the freshness text (caption, muted; warning when stale) and a refresh icon button (`view-refresh-symbolic`).
+1. **Header:** the chosen icon (Robot 20px; avatars 32px with the weekly ring), "Claude" (`text::heading`) and a plan chip, with the email (caption) under them. On the right, the freshness text (caption, muted; warning when stale) and a refresh icon button (`view-refresh-symbolic`).
 2. Inset divider.
 3. **State banner**, if there is one (see §9).
 4. **One quota row per available window**, in the order Session, Weekly, Fable, regardless of the panel toggles. Each row:
    - **Top:** the name (heading) over the description (caption) on the left; the value (mono 24/32 bold) plus "used" or "left" on the right.
    - **Meter:** 8px, `radius_xl`, with a 2 × 14 pace tick.
    - **Bottom:** a 12px `appointment-soon-symbolic` icon and the reset text on the left; the pace text on the right.
-5. Inset divider, then `menu_button` ⚙ "Applet settings" ›.
+5. **API credits row** (§8.3), when an Admin key is saved.
+6. Inset divider, then `menu_button` ⚙ "Applet settings" ›.
 
 ### 8.2 Settings page
 
 1. Back button and "Applet settings", then a full-width divider.
-2. **Panel icon:** three picture tiles in a row (Robot, Cyborg · cyan, Cyborg · red), each showing the live icon at 40px (Robot 28px). The selected tile has a 2px accent border. Below them, a caption: "Symbolic · follows the theme" or "Full colour · ring shows session left". This is a radio group for a11y.
-3. **Show in panel:** toggler rows for Session, Weekly and Fable (all on by default) and "Session reset" (off).
+2. **Panel icon:** three picture tiles in a row (Robot, Cyborg · cyan, Cyborg · red), each showing the live icon at 40px (Robot 28px). The selected tile has a 2px accent border. Below them, a caption: "Symbolic · follows the theme" or "Full colour · ring shows weekly left". This is a radio group for a11y.
+3. **Show in panel:** toggler rows for Session (only while the data has that window), Weekly and Fable (all on by default), "API credits" (on; only with an Admin key) and "Weekly reset" (off).
    - At least one window stays on; the last enabled toggler is disabled, with a caption saying why.
    - The Fable toggler is disabled with the caption `no-fable-limit` when the account has no Fable window.
 4. **Panel style:** a segmented control with Percent, Bars (default) and Both.
@@ -193,6 +194,21 @@ Claude Code's access token lasts about 8 hours and is renewed only when `claude`
 7. **Refresh every:** 1 min, 5 min (default) or 15 min.
 
 Every change applies immediately and persists.
+
+### 8.3 API credits (added 2026-11-01)
+
+Max, Ultra and Team plans include monthly Claude Platform credits. The balance is only on the Console billing page (its endpoint refuses OAuth tokens), so the applet shows the **billing cycle's API spend** against the credit, from the Admin API cost report:
+
+```text
+GET https://api.anthropic.com/v1/organizations/cost_report?starting_at=<cycle start>&ending_at=<now>&bucket_width=1d&limit=31
+x-api-key: <Admin API key>   anthropic-version: 2023-06-01
+```
+
+`data[].results[].amount` are decimal strings in cents; sum them, following `has_more` / `next_page`. The cycle starts at 00:00 UTC on `credit_renew_day` (clamped to the month) and ends at the next one; a fetch is scheduled 30 s after the renewal. The spend is read with every usage fetch and right after a key is saved. 401 / 403 marks the key rejected and stops the cost requests until it's replaced; other failures dim the last value.
+
+- **Settings → API credits:** a secure input for the Admin key with **Test** (saves, then reads) and **Remove**; a status caption; **Monthly credit** $100 / $200; **Renews on day** 1–31. The key lives in the keyring only (attributes `application`, `kind=admin-key`); without a keyring it's used for the run and the page says it wasn't saved.
+- **Row:** "API credits" over "$200 a month · Claude Platform"; "$37.20" with "of $200" (or "$162.80" "left"); the meter with the pace tick (expected = elapsed fraction of the cycle); the foot "Renews in 26d 4h" / "Renews 28 Nov" and the pace. At or over the credit: "Credits used up · renews 28 Nov" in `destructive`. With a key but no spend yet: a caption ("Checking API credits…", "Admin key not accepted", …) instead of the row.
+- **Panel chunk** `API`, like a window's. **Tooltip:** "API credits $37.20 of $200 used, renews in 26d 4h".
 
 ## 9. States
 
@@ -217,19 +233,22 @@ Config {
   show_session: bool = true
   show_weekly: bool = true
   show_fable: bool = true
-  show_session_reset: bool = false
+  show_weekly_reset: bool = false   // was show_session_reset until 2026-11-01
+  show_credits: bool = true         // the API chunk, once an Admin key is saved
   style: PanelStyle = Bars          // Percent | Bars | Both
   amount: Amount = Used             // Used | Left
   reset_format: ResetFormat = Relative   // Relative | Absolute
   refresh_minutes: u8 = 5           // 1 | 5 | 15 (anything else → 5)
+  credit_dollars: u16 = 200         // 100 | 200 (anything else → 200)
+  credit_renew_day: u8 = 1          // 1–31 (anything else → 1)
 }
 ```
 
-**Invariant:** at least one `show_*` window is true. If a loaded config has none, force `show_session = true`.
+**Invariant:** at least one `show_*` window is true. If a loaded config has none, force `show_weekly = true`.
 
 ## 11. Privacy and security
 
-- The only network destination is `api.anthropic.com`. There's no telemetry, no update check and no other hosts.
+- The only network destinations are `api.anthropic.com` (usage, and the cost report with an Admin key) and `platform.claude.com` (renewing the applet's own sign-in). There's no telemetry, no update check and no other hosts.
 - Nothing is written to disk except cosmic-config settings. **Don't cache usage on disk.** A cold start shows "Updated —" until the first fetch.
 - The token never appears in logs, the UI, the clipboard or panic messages. Wrap it in a newtype with a redacting `Debug`.
 

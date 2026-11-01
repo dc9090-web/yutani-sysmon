@@ -90,7 +90,7 @@ pub async fn fetch(client: reqwest::Client, token: Token) -> Outcome {
 }
 
 /// `Retry-After` in seconds; 300 if it's missing or a date.
-fn retry_after(v: Option<&str>) -> Duration {
+pub(crate) fn retry_after(v: Option<&str>) -> Duration {
     Duration::from_secs(v.and_then(|s| s.trim().parse::<u64>().ok()).unwrap_or(300))
 }
 
@@ -174,6 +174,15 @@ mod tests {
         assert_eq!(used(&u), [(Kind::Session, 42.0), (Kind::Weekly, 61.0), (Kind::Fable, 84.0)]);
         assert_eq!(u.get(Kind::Session).unwrap().resets_at, at("2026-10-08T12:13:00Z"));
         assert_eq!(u.get(Kind::Fable).unwrap().resets_at, at("2026-10-11T14:00:00Z"));
+    }
+
+    #[test]
+    fn weekly_only() {
+        // Claude dropped the 5-hour window (2026-11): no Session, Fable matched by name.
+        let u = parse(&fixture("weekly_only")).unwrap();
+        assert_eq!(used(&u), [(Kind::Weekly, 76.0), (Kind::Fable, 48.0)]);
+        assert_eq!(u.get(Kind::Weekly).unwrap().resets_at, at("2026-10-11T14:00:00.152293Z"));
+        assert_eq!(u.get(Kind::Session), None);
     }
 
     #[test]

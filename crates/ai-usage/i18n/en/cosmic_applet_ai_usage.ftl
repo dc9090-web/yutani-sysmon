@@ -21,6 +21,20 @@ label-fable = Fable
 label-reset = Reset
 label-reset-now = now
 label-reset-none = —
+label-credits = API
+
+# API credits (Claude Platform)
+credits = API credits
+credits-desc = { $limit } a month · Claude API
+credits-of = of { $limit }
+credits-used-up = Credits used up · { $renew }
+renews-in = Renews in { $time }
+renews-on = Renews { $date }
+renewing-now = Renewing now
+credits-rejected = Admin key not accepted
+credits-offline = API credits: couldn't update
+credits-format = API credits: spend format not recognised
+credits-loading = Checking API credits…
 
 # Amounts and pace
 used = used
@@ -78,8 +92,9 @@ account-claude-code-desc = Sign in here to keep working when Claude Code isn't r
 show-in-panel = Show in panel
 toggle-weekly-desc = All models
 toggle-fable-desc = Fable weekly limit
-session-reset = Session reset
-session-reset-desc = Time until the 5-hour window resets
+toggle-credits-desc = This month's API spend against the credit
+weekly-reset = Weekly reset
+weekly-reset-desc = Time until the 7-day window resets
 at-least-one = At least one stays on
 panel-style = Panel style
 style-percent = Percent
@@ -94,6 +109,25 @@ reset-absolute = Clock time
 refresh-every = Refresh every
 minutes = { $n } min
 
+# API credits settings
+api-credits = API credits
+admin-key-placeholder = Paste your Admin API key
+admin-key-placeholder-saved = Key saved · paste a new one to replace it
+admin-key-shape = Admin keys start with sk-ant-admin
+test = Test
+remove = Remove
+checking = Checking…
+key-works = Key works
+key-invalid = Key not accepted · it must be an Admin key
+key-offline = Couldn't check: offline
+key-rate-limited = Couldn't check: rate limited
+key-format = Couldn't read the cost report
+key-no-keyring = No system keyring found · the key wasn't saved
+admin-key-tip = Create one at platform.claude.com/settings/admin-keys. Spend lags Anthropic by a few minutes.
+monthly-credit = Monthly credit
+credit-amount = ${ $n }
+renew-day = Renews on day
+
 # Accessible name / tooltip
 a11y-window = { $name } { $pct }% { $amount }, { $reset }
 a11y-window-no-reset = { $name } { $pct }% { $amount }
@@ -104,6 +138,7 @@ a11y-offline = offline, updated { $time } ago
 a11y-offline-never = offline
 a11y-rate-limited = rate limited, retry in { $time }
 a11y-expired = Claude login expired
+a11y-credits = API credits { $spent } of { $limit } used, { $renew }
 
 # Panel icon
 panel-icon = Panel icon
@@ -111,7 +146,7 @@ icon-robot = Robot
 icon-cyborg-cyan = Cyborg · cyan
 icon-cyborg-red = Cyborg · red
 icon-note-symbolic = Symbolic · follows the theme
-icon-note-avatar = Full colour · ring shows session left
-ring-left = Session { $pct }% left
-ring-limit = Session limit reached
-ring-no-data = Session: no data
+icon-note-avatar = Full colour · ring shows weekly left
+ring-left = Week { $pct }% left
+ring-limit = Weekly limit reached
+ring-no-data = Weekly: no data
