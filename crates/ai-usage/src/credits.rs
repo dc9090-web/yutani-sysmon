@@ -42,9 +42,11 @@ impl std::fmt::Debug for AdminKey {
     }
 }
 
-/// Admin keys start `sk-ant-admin`. Other shapes get a warning but can still be tested.
+/// Anthropic keys start `sk-ant-`: Admin keys have been `sk-ant-admin01-…`
+/// and, since the platform.claude.com Console, `sk-ant-usr-…`. Other shapes
+/// get a warning but can still be tested.
 pub fn looks_valid(s: &str) -> bool {
-    s.trim().starts_with("sk-ant-admin")
+    s.trim().starts_with("sk-ant-")
 }
 
 // ---- billing cycle ----------------------------------------------------------------
@@ -373,7 +375,8 @@ mod tests {
     #[test]
     fn key_shape_and_redaction() {
         assert!(looks_valid("  sk-ant-admin01-abc "));
-        assert!(!looks_valid("sk-ant-usr-abc"));
+        assert!(looks_valid("sk-ant-usr-abc"));
+        assert!(!looks_valid("ghp_abc"));
         assert_eq!(AdminKey::new("  "), None);
         let k = AdminKey::new(" sk-ant-admin01-abc ").unwrap();
         assert_eq!(k.expose(), "sk-ant-admin01-abc");
