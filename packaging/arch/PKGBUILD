@@ -16,7 +16,7 @@ depends=(libxkbcommon gcc-libs glibc)
 makedepends=(cargo git pkgconf wayland)
 options=(!lto)
 source=("$pkgbase-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('e83ef7dc901ed9bc64ca3007e6ba66d7343dadc1277dc92348d7fe06969ea6b4')
 
 _src() { echo "$srcdir/yutani-sysmon-$pkgver"; }
 
