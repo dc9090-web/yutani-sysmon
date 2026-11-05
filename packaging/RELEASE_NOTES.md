@@ -1,11 +1,10 @@
 Five tiny, native COSMIC panel applets, now with **one package per applet** for Pop!_OS / Ubuntu, Fedora and Arch. Install the ones you want, then add them in *Settings → Desktop → Panel → Applets*: they're all listed as **Yutani …**, so search for *Yutani*.
 
-### ✨ New since 0.1.0
+### ✨ New since 0.2.0
 
-- 🛡️ **VPN applet** *(new)*: two ProtonVPN WireGuard switches: a torrent-only tunnel that only qBittorrent can use (kill switch by construction, NAT-PMP port forwarding pushed into qBittorrent, leak detection) and a NetworkManager tunnel for all web traffic. Mono, Neon or Auto panel icon; either chunk can hide while its tunnel is off.
-- 🖥️ **System Monitor**: **NVIDIA** GPUs (proprietary driver, via NVML) and **Intel** integrated GPUs (`i915` / `xe`), alongside AMD. A sleeping laptop dGPU is never woken.
-- 🤖 **AI Usage**: its **own Claude sign-in**, kept in the keyring and renewed automatically, so it keeps working when you use Claude elsewhere and never run `claude` on this computer. Claude Code's login still works, read-only.
-- 🔎 Every applet is now named **Yutani …** in the applet list.
+- 🤖 **AI Usage**: Claude has dropped the 5-hour window from most plans, so the avatar ring, the first panel bar and the reset countdown now follow the **weekly** limit. The popup's **Session** row is the 7-day, all-models limit with its reset time.
+- 💳 **API credits** *(new)*: this billing cycle's Claude Platform spend against the monthly credit that comes with Max, Ultra and Team plans, as a popup row and an optional `API` panel bar. Paste an **Admin API key** in Settings (kept in the keyring, with Test and Remove), set the monthly credit ($100 / $200) and the day it renews. Keys from the new Console (`sk-ant-usr-…`) are accepted.
+- ⚙️ Settings: `show_session_reset` is now `show_weekly_reset`; new `show_credits`, `credit_dollars` and `credit_renew_day`. The settings page scrolls inside the popup.
 
 ### 📦 Install
 
