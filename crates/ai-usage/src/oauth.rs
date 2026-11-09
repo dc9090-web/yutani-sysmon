@@ -59,6 +59,11 @@ impl Session {
         Token::new(self.access_token.clone())
     }
 
+    /// Same tokens: the other session is this login, not a renewal of it.
+    pub fn same_login(&self, other: &Session) -> bool {
+        self.access_token == other.access_token
+    }
+
     /// The access token has expired or will within [`MARGIN`].
     pub fn needs_refresh(&self, now: DateTime<Utc>) -> bool {
         DateTime::from_timestamp_millis(self.expires_at).is_none_or(|t| t - MARGIN <= now)
@@ -287,6 +292,16 @@ fn session_from(json: &Value, previous: Option<&Session>) -> Option<Session> {
     })
 }
 
+/// The session with its email and plan re-read, so a plan change shows at
+/// the next start rather than the next renewal. `None` when the profile
+/// couldn't be read or changed nothing. Not saved: a renewal may be under
+/// way, and saving over it would lose the rotated refresh token.
+pub async fn reload_profile(client: reqwest::Client, s: Session) -> Option<Session> {
+    let mut next = s.clone();
+    profile(&client, &mut next).await;
+    (next != s).then_some(next)
+}
+
 /// Fills in the email and plan from the profile endpoint. Best effort.
 async fn profile(client: &reqwest::Client, s: &mut Session) {
     let response = client.get(PROFILE_URL).bearer_auth(&s.access_token).header("anthropic-beta", "oauth-2025-04-20").send().await;
@@ -297,16 +312,16 @@ async fn profile(client: &reqwest::Client, s: &mut Session) {
     s.plan = plan.or(s.plan.take());
 }
 
-/// `account.email`, and the plan from `organization.organization_type`
-/// ("claude_max" → "Max").
+/// `account.email`, and the plan: `organization.plan_display_name`
+/// ("Ultra") when it's there, else `organization.organization_type`
+/// ("claude_max" → "Max"). Ultra organisations keep the type `claude_max`,
+/// so the display name has to win.
 fn parse_profile(json: &Value) -> (Option<String>, Option<String>) {
-    let email = json.pointer("/account/email").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned);
-    let plan = json
-        .pointer("/organization/organization_type")
-        .and_then(Value::as_str)
-        .map(|t| t.strip_prefix("claude_").unwrap_or(t))
-        .filter(|t| !t.is_empty())
-        .map(plan_label);
+    let text = |p: &str| json.pointer(p).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+    let email = text("/account/email").map(str::to_owned);
+    let plan = text("/organization/plan_display_name")
+        .map(str::to_owned)
+        .or_else(|| text("/organization/organization_type").map(|t| t.strip_prefix("claude_").unwrap_or(t)).filter(|t| !t.is_empty()).map(plan_label));
     (email, plan)
 }
 
@@ -424,6 +439,11 @@ mod tests {
     fn profile_parsing() {
         let v = serde_json::json!({ "account": { "email": "dc@example.com" }, "organization": { "organization_type": "claude_max" } });
         assert_eq!(parse_profile(&v), (Some("dc@example.com".into()), Some("Max".into())));
+        // Ultra is still organization_type claude_max (seen 2026-11-09); the display name wins.
+        let v = serde_json::json!({ "organization": { "organization_type": "claude_max", "plan_display_name": "Ultra", "plan_display_label": "Ultra plan" } });
+        assert_eq!(parse_profile(&v), (None, Some("Ultra".into())));
+        let v = serde_json::json!({ "organization": { "organization_type": "claude_pro", "plan_display_name": "" } });
+        assert_eq!(parse_profile(&v), (None, Some("Pro".into())));
         assert_eq!(parse_profile(&serde_json::json!({})), (None, None));
     }
 

@@ -87,6 +87,8 @@ pub enum Message {
     Escape,
     /// The applet's own login, read from the keyring at start.
     SessionLoaded(Option<Session>),
+    /// That login with its plan and email re-read, if they changed.
+    ProfileLoaded(Option<Session>),
     /// Read the login and fetch.
     Refresh,
     CredentialsChanged,
@@ -1178,8 +1180,24 @@ impl cosmic::Application for App {
                 tracing::debug!(signed_in = s.is_some(), "applet login loaded");
                 self.session = s;
                 self.loaded = true;
-                return self.refresh();
+                let profile = match &self.session {
+                    Some(s) => {
+                        cosmic::task::future(oauth::reload_profile(self.client.clone(), s.clone())).map(|s| cosmic::Action::App(Message::ProfileLoaded(s)))
+                    }
+                    None => Task::none(),
+                };
+                return Task::batch([profile, self.refresh()]);
             }
+            Message::ProfileLoaded(Some(s)) => {
+                // A renewal that landed first already re-read the profile itself.
+                if let Some(cur) = self.session.as_mut().filter(|cur| cur.same_login(&s)) {
+                    tracing::debug!(plan = ?s.plan, "profile re-read");
+                    cur.email = s.email;
+                    cur.plan = s.plan;
+                    self.account = cur.account();
+                }
+            }
+            Message::ProfileLoaded(None) => {}
             Message::Refresh => return self.refresh(),
             Message::SignIn => {
                 if !matches!(self.sign_in, SignInFlow::Waiting(_)) {
