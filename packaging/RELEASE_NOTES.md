@@ -1,10 +1,8 @@
 Five tiny, native COSMIC panel applets, now with **one package per applet** for Pop!_OS / Ubuntu, Fedora and Arch. Install the ones you want, then add them in *Settings → Desktop → Panel → Applets*: they're all listed as **Yutani …**, so search for *Yutani*.
 
-### ✨ New since 0.2.0
+### ✨ New since 0.3.0
 
-- 🤖 **AI Usage**: Claude has dropped the 5-hour window from most plans, so the avatar ring, the first panel bar and the reset countdown now follow the **weekly** limit. The popup's **Session** row is the 7-day, all-models limit with its reset time.
-- 💳 **API credits** *(new)*: this billing cycle's Claude Platform spend against the monthly credit that comes with Max, Ultra and Team plans, as a popup row and an optional `API` panel bar. Paste an **Admin API key** in Settings (kept in the keyring, with Test and Remove), set the monthly credit ($100 / $200) and the day it renews. Keys from the new Console (`sk-ant-usr-…`) are accepted.
-- ⚙️ Settings: `show_session_reset` is now `show_weekly_reset`; new `show_credits`, `credit_dollars` and `credit_renew_day`. The settings page scrolls inside the popup.
+- 🤖 **AI Usage**: the plan chip in the popup header now shows the plan name Anthropic reports for your organisation, so an **Ultra** plan reads Ultra rather than Max (Anthropic still files Ultra under the Max tier internally). The plan and email are re-read each time the applet starts, not only when the login renews, so a plan change shows at the next launch.
 
 ### 📦 Install
 
