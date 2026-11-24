@@ -3,5 +3,6 @@
 //! `tailscaled`'s local API on its Unix socket.
 
 mod api;
+mod model;
 
 fn main() {}
