@@ -1046,6 +1046,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmic-applet-tailscale"
+version = "0.3.1"
+dependencies = [
+ "chrono",
+ "futures-util",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "i18n-embed",
+ "i18n-embed-fl",
+ "libcosmic",
+ "nix 0.30.1",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "yutani-monitor-common",
+]
+
+[[package]]
 name = "cosmic-applet-vpn"
 version = "0.3.1"
 dependencies = [

@@ -1,0 +1,51 @@
+{
+ "Version": "1.104.7",
+ "TUN": true,
+ "BackendState": "NeedsLogin",
+ "HaveNodeKey": false,
+ "AuthURL": "",
+ "TailscaleIPs": null,
+ "Self": {
+  "ID": "nAAAA1CNTRL",
+  "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000000",
+  "HostName": "alpha",
+  "DNSName": "alpha.example.ts.net.",
+  "OS": "linux",
+  "UserID": 1,
+  "TailscaleIPs": null,
+  "CurAddr": "",
+  "Relay": "syd",
+  "PeerRelay": "",
+  "RxBytes": 0,
+  "TxBytes": 0,
+  "Created": "2026-06-01T00:00:00Z",
+  "LastWrite": "0001-01-01T00:00:00Z",
+  "LastSeen": "0001-01-01T00:00:00Z",
+  "LastHandshake": "0001-01-01T00:00:00Z",
+  "Online": false,
+  "ExitNode": false,
+  "ExitNodeOption": false,
+  "Active": false,
+  "InNetworkMap": true,
+  "InMagicSock": true,
+  "InEngine": false,
+  "Addrs": [
+   "192.0.2.10:41641"
+  ]
+ },
+ "Health": [
+  "You are logged out."
+ ],
+ "MagicDNSSuffix": "example.ts.net",
+ "CurrentTailnet": null,
+ "CertDomains": null,
+ "Peer": null,
+ "User": {
+  "1": {
+   "ID": 1,
+   "LoginName": "user@example.com",
+   "DisplayName": "User"
+  }
+ },
+ "ClientVersion": null
+}

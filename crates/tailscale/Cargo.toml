@@ -1,0 +1,29 @@
+[package]
+name = "cosmic-applet-tailscale"
+description = "COSMIC panel applet: Tailscale status, an on/off switch, an exit-node picker and a device list"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# `TAILSCALE_DEMO=1` cycles through every state from the fixtures: no daemon needed.
+demo = []
+
+[dependencies]
+common.workspace = true
+libcosmic.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+nix = { version = "0.30", default-features = false, features = ["user"] }
+serde_json = "1"
+tokio = { version = "1", features = ["net", "time", "macros", "rt", "io-util"] }
