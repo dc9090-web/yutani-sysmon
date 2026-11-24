@@ -7,7 +7,7 @@ use crate::api::{BusEvent, Notify, Prefs, Status};
 use crate::state::{Page, State};
 
 pub const STEP: std::time::Duration = std::time::Duration::from_secs(8);
-pub const SCENES: usize = 12;
+pub const SCENES: usize = 13;
 /// The demo's local user.
 const USER: &str = "alex";
 
@@ -101,10 +101,23 @@ pub fn scene(i: usize) -> Scene {
             }
             ("key expiring", s)
         }
-        _ => {
+        11 => {
             let mut s = connected();
             s.page = Page::Settings;
             ("settings", s)
+        }
+        // Names as long as real tailnets have, to show nothing leaves the popup.
+        _ => {
+            let mut s = with_exit(EXIT_NODE);
+            if let Some(me) = s.snap.status.self_node.as_mut() {
+                me.host_name = "workstation-super-long-hostname".to_owned();
+                me.dns_name = "workstation-super-long-hostname.tail0123ab.example.ts.net.".to_owned();
+            }
+            for p in &mut s.snap.status.peers {
+                let label = p.dns_name.split('.').next().unwrap_or_default().to_owned();
+                p.dns_name = format!("{label}-tailscale-subnet-router-sydney.example.ts.net.");
+            }
+            ("long names", s)
         }
     };
     Scene { name, state }
@@ -120,7 +133,10 @@ mod tests {
     fn every_scene_builds() {
         let links: Vec<Link> = (0..SCENES).map(|i| model::link(&scene(i).state.snap)).collect();
         use Link::*;
-        assert_eq!(links, [Connected, Connected, Connected, Connected, Connecting, Off, Connected, NeedsLogin, Unavailable, Connected, Connected, Connected]);
+        assert_eq!(
+            links,
+            [Connected, Connected, Connected, Connected, Connecting, Off, Connected, NeedsLogin, Unavailable, Connected, Connected, Connected, Connected]
+        );
         assert_eq!(scene(SCENES + 2).name, scene(2).name, "scene numbers wrap");
     }
 
@@ -130,9 +146,15 @@ mod tests {
         assert_eq!(at("exit page").page, Page::ExitNode);
         assert_eq!(at("exit page, by country").page, Page::ExitNode);
         assert_eq!(at("settings").page, Page::Settings);
+        let long = at("long names");
+        assert!(crate::model::devices(&long.snap.status, "", true).iter().any(|d| d.name.len() > 24));
+        assert!(long.snap.status.self_node.unwrap().dns_name.len() > 40);
         assert!(!at("operator needed").can_write());
         assert!(at("connected").can_write());
-        assert_eq!(model::word(&at("health error").snap, now()).0, "panel-error");
+        assert_eq!(model::dot(&at("health error").snap, now()), model::Dot::Red);
+        assert_eq!(model::dot(&at("connecting").snap, now()), model::Dot::Orange);
+        assert_eq!(model::dot(&at("off").snap, now()), model::Dot::Red);
+        assert_eq!(model::dot(&at("key expiring").snap, now()), model::Dot::Green);
         assert_eq!(model::key_days_left(&at("key expiring").snap, now()), Some(5));
         assert_eq!(model::exit_name(&at("exit node").snap), Some(("bravo".to_owned(), true)));
     }

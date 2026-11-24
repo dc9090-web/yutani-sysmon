@@ -21,24 +21,24 @@ use common::ui::{self, mono, space_m, space_s, space_xs, space_xxs, space_xxxs};
 use crate::api::{self, ApiError, BusEvent, MaskedPrefs, Prefs, Status, Suggestion};
 use crate::config::{APP_ID, Config, CopyWhat};
 use crate::fl;
-use crate::model::{self, Conn, Device, ExitOption, Link};
+use crate::model::{self, Conn, Device, ExitOption, Link, Tone};
 use crate::preview;
 use crate::state::{BUSY_LIMIT, Banner, Busy, Page, State, copy_text, fetch_delay};
 use crate::widgets::glyph::glyph;
-use crate::widgets::panel::{self, Chunk, tone_ink};
 
 /// How often the device list is refreshed while the popup is open.
 const REFRESH: Duration = Duration::from_secs(5);
 const TOAST: Duration = Duration::from_millis(1400);
 /// Width of the key column in "This device".
-const KEY_W: f32 = 92.0;
+const KEY_W: f32 = 84.0;
+/// Long names break inside their column, mid-word if they must, never past it.
+const WRAP: cosmic::iced::widget::text::Wrapping = cosmic::iced::widget::text::Wrapping::WordOrGlyph;
 /// The lists scroll past these heights, so the popup stays under libcosmic's cap.
 const DEVICES_MAX: f32 = 336.0;
 const PAGE_MAX: f32 = 640.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Toggle {
-    ShowStatus,
     ShowOffline,
 }
 
@@ -182,15 +182,6 @@ impl App {
 
     // ---- panel ------------------------------------------------------------------------
 
-    fn chunk(&self) -> Option<Chunk> {
-        let now = self.now();
-        if !model::show_chunk(&self.st.snap, now, self.config.show_status) {
-            return None;
-        }
-        let (key, tone) = model::word(&self.st.snap, now);
-        Some(Chunk { label: fl!("panel-label"), value: fl_key(key), tone, chars: 3.0 })
-    }
-
     fn tooltip(&self) -> String {
         let link = model::link(&self.st.snap);
         let mut text = match link {
@@ -226,8 +217,7 @@ impl App {
         let (iw, ih) = p.icon;
         let size = if p.horizontal { ih } else { iw };
         let thickness = size + 2.0 * f32::from(minor);
-        let icon = glyph(model::icon(&self.st.snap), model::issue(&self.st.snap, self.now()), size);
-        let content = panel::content(icon, self.chunk(), &p);
+        let content = glyph(Some(model::dot(&self.st.snap, self.now())), size);
         let (pad, w, h) =
             if p.horizontal { ([0, major], Length::Shrink, Length::Fixed(thickness)) } else { ([major, 0], Length::Fixed(thickness), Length::Shrink) };
         let button = widget::button::custom(widget::container(content).center_x(w).center_y(h))
@@ -240,9 +230,7 @@ impl App {
 
     #[cfg(feature = "demo")]
     fn panel_preview(&self) -> Element<'_, Message> {
-        let p = Panel::of(&self.core.applet);
-        let icon = glyph(model::icon(&self.st.snap), model::issue(&self.st.snap, self.now()), 20.0);
-        let content = panel::content(icon, self.chunk(), &p);
+        let content = glyph(Some(model::dot(&self.st.snap, self.now())), 20.0);
         widget::container(widget::container(content).padding([4, 12]).class(theme::Container::Card)).padding([8, 24]).into()
     }
 
@@ -278,7 +266,7 @@ impl App {
             Row::new()
                 .spacing(space_s())
                 .align_y(Alignment::Center)
-                .push(glyph(model::icon(&self.st.snap), None, 24.0))
+                .push(glyph(None, 24.0))
                 .push(Column::new().width(Length::Fill).push(widget::text::heading(fl!("title"))).push(widget::text::caption(caption).class(ink.text())))
                 .push(toggler),
         )
@@ -362,7 +350,7 @@ impl App {
             .spacing(space_xs())
             .align_y(Alignment::Center)
             .push(widget::text::body(fl!("exit-node")).width(Length::Fixed(KEY_W)))
-            .push(widget::text::body(value).class(ink.text()).width(Length::Fill))
+            .push(widget::text::body(value).class(ink.text()).width(Length::Fill).wrapping(WRAP))
             .push(widget::icon::from_name("go-next-symbolic").size(16).symbolic(true));
         applet::menu_button(row).on_press(Message::Page(Page::ExitNode)).into()
     }
@@ -405,9 +393,10 @@ impl App {
             .spacing(space_xs())
             .align_y(Alignment::Center)
             .push(ui::dot(if d.online { Ink::Success } else { Ink::ComponentDivider }))
-            .push(widget::text::body(d.name.clone()).class(name_ink.text()).wrapping(cosmic::iced::widget::text::Wrapping::None))
-            .push(widget::text::caption(d.os.clone()).class(Ink::Muted.text()).width(Length::Fill))
-            .push(widget::text::caption(conn).class(Ink::Muted.text()));
+            // The name takes what's left and wraps inside it, so a long one
+            // can't push the connection text out of the popup.
+            .push(widget::text::body(d.name.clone()).class(name_ink.text()).width(Length::Fill).wrapping(WRAP))
+            .push(widget::text::caption(conn).class(Ink::Muted.text()).wrapping(cosmic::iced::widget::text::Wrapping::None));
         applet::menu_button(row).on_press_maybe(copy_text(d, self.config.copy).map(Message::Copy)).into()
     }
 
@@ -509,9 +498,6 @@ impl App {
             ));
         Column::new()
             .push(ui::back_header(fl!("settings"), fl!("back"), Message::Page(Page::Main)))
-            .push(ui::group_label(fl!("sec-panel")))
-            .push(self.toggle_row(Toggle::ShowStatus, fl!("set-status"), fl!("set-status-caption"), self.config.show_status))
-            .push(ui::inset_divider())
             .push(ui::group_label(fl!("sec-devices")))
             .push(self.toggle_row(Toggle::ShowOffline, fl!("set-offline"), fl!("set-offline-caption"), self.config.show_offline))
             .push(copy)
@@ -531,13 +517,17 @@ impl App {
 
 // ---- small widgets ------------------------------------------------------------------------
 
+fn tone_ink(t: Tone) -> Ink {
+    match t {
+        Tone::Busy => Ink::On,
+        Tone::On => Ink::Success,
+        Tone::Err => Ink::Destructive,
+    }
+}
+
 /// The `.ftl` string for a key the model hands back.
 fn fl_key(key: &str) -> String {
     match key {
-        "panel-on" => fl!("panel-on"),
-        "panel-off" => fl!("panel-off"),
-        "panel-connecting" => fl!("panel-connecting"),
-        "panel-error" => fl!("panel-error"),
         "head-connected" => fl!("head-connected"),
         "head-trouble" => fl!("head-trouble"),
         "head-connecting" => fl!("head-connecting"),
@@ -602,9 +592,9 @@ fn kv<'a>(key: String, value: String, copy: bool) -> Element<'a, Message> {
     let mut row = Row::new()
         .spacing(space_xs())
         .align_y(Alignment::Center)
-        .height(Length::Fixed(28.0))
         .push(widget::text::caption(key).class(Ink::Muted.text()).width(Length::Fixed(KEY_W)))
-        .push(widget::text::body(value.clone()).width(Length::Fill).wrapping(cosmic::iced::widget::text::Wrapping::None));
+        // A long MagicDNS name wraps onto a second line; the row grows with it.
+        .push(widget::text::body(value.clone()).width(Length::Fill).wrapping(WRAP));
     if copy {
         row = row.push(copy_button(value));
     }
@@ -832,7 +822,6 @@ impl cosmic::Application for App {
             Message::Query(q) => self.st.query = q,
             Message::ExitQuery(q) => self.st.exit_query = q,
             Message::Set(t, v) => match t {
-                Toggle::ShowStatus => self.save(|c, h| c.set_show_status(h, v)),
                 Toggle::ShowOffline => self.save(|c, h| c.set_show_offline(h, v)),
             },
             Message::CopyMode(e) => {
@@ -911,8 +900,7 @@ fn open_popup(bounds: Rectangle, offset: cosmic::iced::Vector) -> cosmic::surfac
 
 #[cfg(test)]
 mod tests {
-    const SOURCES: [&str; 5] =
-        [include_str!("app.rs"), include_str!("widgets/panel.rs"), include_str!("widgets/glyph.rs"), include_str!("model.rs"), include_str!("state.rs")];
+    const SOURCES: [&str; 4] = [include_str!("app.rs"), include_str!("widgets/glyph.rs"), include_str!("model.rs"), include_str!("state.rs")];
 
     #[test]
     fn no_hex_colours() {
@@ -935,8 +923,8 @@ mod tests {
         // Keys the model hands to `fl_key`; each must also have an arm there.
         let app = include_str!("app.rs");
         let model = include_str!("model.rs");
-        let handed: Vec<&str> = model.split('"').filter(|s| s.starts_with("panel-") || s.starts_with("head-")).collect();
-        assert!(handed.len() >= 11);
+        let handed: Vec<&str> = model.split('"').filter(|s| s.starts_with("head-")).collect();
+        assert!(handed.len() >= 8);
         for k in handed {
             assert!(keys.contains(&k), "{k} missing from the .ftl file");
             assert!(app.contains(&format!("\"{k}\" => fl",)), "{k} has no arm in fl_key");

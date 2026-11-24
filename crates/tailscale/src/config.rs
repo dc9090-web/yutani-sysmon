@@ -19,15 +19,13 @@ pub enum CopyWhat {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, CosmicConfigEntry)]
 #[version = 1]
 pub struct Config {
-    /// Off: the `TS` word leaves the panel while it would only say `ON` or `OFF`.
-    pub show_status: bool,
     pub show_offline: bool,
     pub copy: CopyWhat,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { show_status: true, show_offline: true, copy: CopyWhat::Address }
+        Self { show_offline: true, copy: CopyWhat::Address }
     }
 }
 
@@ -58,7 +56,7 @@ mod tests {
     #[test]
     fn defaults() {
         let d = Config::default();
-        assert!(d.show_status && d.show_offline);
+        assert!(d.show_offline);
         assert_eq!(d.copy, CopyWhat::Address);
     }
 }

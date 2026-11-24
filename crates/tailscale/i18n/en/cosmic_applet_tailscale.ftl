@@ -1,9 +1,4 @@
 ## Panel
-panel-label = TS
-panel-on = ON
-panel-off = OFF
-panel-connecting = …
-panel-error = ERR
 tooltip-connected = Tailscale connected
 tooltip-connecting = Tailscale connecting
 tooltip-off = Tailscale off
@@ -82,10 +77,7 @@ exit-lan-caption = Keep printers and other LAN devices reachable while using an 
 
 ## Settings
 settings = Applet settings
-sec-panel = Panel
 sec-devices = Devices
-set-status = Show status in panel
-set-status-caption = The ON / OFF word next to the icon. Connecting and errors always show.
 set-offline = Show offline devices
 set-offline-caption = List devices that aren't connected right now
 set-copy = Clicking a device copies

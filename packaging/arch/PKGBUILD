@@ -101,5 +101,5 @@ package_yutani-tailscale() {
   cd "$(_src)"
   install -Dm0755 target/release/cosmic-applet-tailscale -t "$pkgdir/usr/bin"
   install -Dm0644 crates/tailscale/resources/io.github.dc.CosmicAppletTailscale.desktop -t "$pkgdir/usr/share/applications"
-  for i in off connecting on exit; do _icon "crates/tailscale/resources/icons/tailscale-mesh-$i-symbolic.svg" apps; done
+  _icon crates/tailscale/resources/icons/io.github.dc.CosmicAppletTailscale-symbolic.svg apps
 }

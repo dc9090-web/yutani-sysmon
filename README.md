@@ -254,12 +254,12 @@ and import both configs from the applet's settings. Importing the torrent config
 
 A panel switch for [Tailscale](https://tailscale.com/), in the spirit of [trayscale](https://github.com/DeedleFake/trayscale) but native to COSMIC:
 
-- 🎯 **Panel:** a mesh glyph (open nodes when off, one filled while connecting, all filled when connected, an arrow leaving the mesh when an exit node is in use) and a `TS` word that reads `ON`, `…`, `OFF` or `ERR`, in a cell that never changes width. A red dot and `ERR` mean it can't connect (not signed in, the daemon isn't running, the key expired, or a health warning that breaks connectivity); an amber dot means it works but wants a look (key expiring within 14 days, or the chosen exit node is offline). The word can be hidden; it comes back by itself while connecting or in error.
+- 🎯 **Panel:** Tailscale's dot-grid mark with a status circle over its corner: **green** when connected, **orange** while connecting, **red** when not connected (off, not signed in, the daemon isn't running, the key expired, or a health warning that breaks connectivity). Nothing else, so its width never changes; the tooltip says the state in words, with the exit node and how many devices are online.
 - 🔘 **Switch:** on and off, usable while connecting so a start that hangs can be cancelled.
 - 🚪 **Exit node:** the one in use, and a picker with None, the daemon's recommendation, and every device that offers one (offline ones listed but not selectable). Location-based exit nodes are grouped by country, with search once there are more than 8. **Allow local network access** keeps printers and the like reachable.
 - 💻 **This device:** its name, and its Tailscale address and MagicDNS name with copy buttons.
 - 🧭 **Devices:** everything else in the tailnet, online first, with how each is reached (Direct, Relay · region, Peer relay, Idle, or when it was last seen). Click one to copy its address (or its name, your choice). Search appears past 8 devices.
-- ⚠️ **Warnings:** Tailscale's own health messages are listed in the popup. Ones that don't affect connectivity never raise a dot.
+- ⚠️ **Warnings:** Tailscale's own health messages are listed in the popup, as are a key about to expire and an exit node that has gone offline. Only what stops it working turns the circle red.
 - 💤 **Light:** the applet holds one connection to the daemon's event stream and sleeps on it. The device list is fetched when something changes and every 5 s only while the popup is open.
 
 **One-time setup:** Tailscale lets any user read its status but only its *operator* change settings. Run this once, or the switch and picker stay disabled (the popup shows the same command with a copy button):
@@ -271,6 +271,8 @@ sudo tailscale set --operator=$USER
 Signing in for the first time is still `sudo tailscale up` (see Tailscale's [quickstart](https://tailscale.com/docs/how-to/quickstart)); after that, **Sign in** in the popup opens the login page when a session expires.
 
 `just tailscale-status` prints what the applet makes of the daemon as text (state, operator, exit node, device count), which also works over SSH with no COSMIC session. `just tailscale-demo` runs the popup in a window, cycling through every state every 8 s from the test fixtures, with no daemon (`TAILSCALE_DEMO_SCENE=n` starts on scene *n*; `TAILSCALE_SHOT=file.pam` saves the window and exits).
+
+Tailscale and its logo are trademarks of Tailscale Inc.; this applet is an independent project, not affiliated with or endorsed by them.
 
 Not in this version: Taildrop, switching accounts, Serve/Funnel, and toggles for accepting routes, SSH or advertising this machine as an exit node.
 
@@ -356,7 +358,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
 | AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_weekly`, `show_fable`, `show_credits`, `show_weekly_reset`, `style`, `amount`, `reset_format`, `refresh_minutes`, `credit_dollars`, `credit_renew_day` (the Admin key is in the keyring, never here) |
 | VPN | `~/.config/cosmic/io.github.dc.CosmicAppletVpn/v1/` | `p2p_conf`, `web_conf`, `web_nm_uuid`, `launch_qbit`, `quit_qbit`, `auto_port`, `webui_port`, `webui_user`, `show_port`, `show_p2p_off`, `show_web_off`, `restore`, `last_p2p`, `last_web`, `qbit_command`, `icon_style` (no keys or passwords) |
-| Tailscale | `~/.config/cosmic/io.github.dc.CosmicAppletTailscale/v1/` | `show_status`, `show_offline`, `copy` |
+| Tailscale | `~/.config/cosmic/io.github.dc.CosmicAppletTailscale/v1/` | `show_offline`, `copy` |
 | Weather | `~/.config/cosmic/io.github.dc.CosmicAppletWeather/v1/` | `locations`, `panel_location`, `units`, `icon_set`, `show_city`, `show_hilo`, `refresh_minutes` (the API key is in the keyring, never here) |
 
 ---

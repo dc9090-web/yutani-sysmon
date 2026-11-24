@@ -26,11 +26,5 @@ contents:
     file_info: { mode: 0755 }
   - src: crates/tailscale/resources/io.github.dc.CosmicAppletTailscale.desktop
     dst: /usr/share/applications/io.github.dc.CosmicAppletTailscale.desktop
-  - src: crates/tailscale/resources/icons/tailscale-mesh-off-symbolic.svg
-    dst: /usr/share/icons/hicolor/scalable/apps/tailscale-mesh-off-symbolic.svg
-  - src: crates/tailscale/resources/icons/tailscale-mesh-connecting-symbolic.svg
-    dst: /usr/share/icons/hicolor/scalable/apps/tailscale-mesh-connecting-symbolic.svg
-  - src: crates/tailscale/resources/icons/tailscale-mesh-on-symbolic.svg
-    dst: /usr/share/icons/hicolor/scalable/apps/tailscale-mesh-on-symbolic.svg
-  - src: crates/tailscale/resources/icons/tailscale-mesh-exit-symbolic.svg
-    dst: /usr/share/icons/hicolor/scalable/apps/tailscale-mesh-exit-symbolic.svg
+  - src: crates/tailscale/resources/icons/io.github.dc.CosmicAppletTailscale-symbolic.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/io.github.dc.CosmicAppletTailscale-symbolic.svg

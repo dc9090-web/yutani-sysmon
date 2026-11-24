@@ -4,24 +4,18 @@
 
 use chrono::{DateTime, Utc};
 
-use crate::model::{self, Issue, Link};
+use crate::model::{self, Dot, Link};
 use crate::state::State;
 
 pub fn report(st: &State, now: DateTime<Utc>) -> String {
     let snap = &st.snap;
     let link = model::link(snap);
-    let word = match model::word(snap, now).0 {
-        "panel-on" => "ON",
-        "panel-off" => "OFF",
-        "panel-connecting" => "connecting",
-        _ => "ERR",
+    let dot = match model::dot(snap, now) {
+        Dot::Green => "green",
+        Dot::Orange => "orange",
+        Dot::Red => "red",
     };
-    let dot = match model::issue(snap, now) {
-        None => "none",
-        Some(Issue::Warning) => "amber",
-        Some(Issue::Error) => "red",
-    };
-    let mut out = format!("link        {link:?}\npanel       {word} (dot: {dot})\n");
+    let mut out = format!("link        {link:?}\npanel       {dot} dot\n");
     if link == Link::Unavailable {
         return out;
     }
@@ -80,7 +74,7 @@ mod tests {
         let s = state("bus_running.ndjson", "status_running.json", "daniel");
         let want = "\
 link        Connected
-panel       ON (dot: none)
+panel       green dot
 operator    not set for daniel (writes will be refused)
 tailnet     example.ts.net
 this device alpha  100.64.0.1
@@ -104,12 +98,12 @@ warnings    1 (0 affecting connectivity)
 
         let h = state("bus_health.ndjson", "status_running.json", "daniel");
         let r = report(&h, now());
-        assert!(r.contains("panel       ERR (dot: red)\n"), "{r}");
+        assert!(r.contains("panel       red dot\n"), "{r}");
         assert!(r.contains("warnings    2 (1 affecting connectivity)\n"), "{r}");
 
         let mut down = State::new("daniel".into(), 1000);
         down.apply(BusEvent::Down);
-        assert_eq!(report(&down, now()), "link        Unavailable\npanel       ERR (dot: red)\n");
+        assert_eq!(report(&down, now()), "link        Unavailable\npanel       red dot\n");
     }
 
     #[test]

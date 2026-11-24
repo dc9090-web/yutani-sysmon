@@ -44,7 +44,6 @@ impl Link {
 /// How a state is coloured; always with a word too.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
-    Off,
     Busy,
     On,
     Err,
@@ -52,19 +51,20 @@ pub enum Tone {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Issue {
-    /// Red dot, and the panel word becomes `ERR`.
+    /// It can't carry traffic: the panel dot is red.
     Error,
-    /// Amber dot; the word stays.
+    /// It works but wants a look; said in the popup and tooltip.
     Warning,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum IconKind {
-    Off,
-    Connecting,
-    On,
-    /// Connected and routing through an exit node.
-    Exit,
+/// The circle on the panel icon: the whole state in one colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dot {
+    /// Not connected: off, signed out, no daemon, or connected but not working.
+    Red,
+    /// Connecting.
+    Orange,
+    Green,
 }
 
 pub fn link(s: &Snapshot) -> Link {
@@ -126,30 +126,12 @@ pub fn issue(s: &Snapshot, now: DateTime<Utc>) -> Option<Issue> {
     None
 }
 
-/// The panel word's `.ftl` key and its tone.
-pub fn word(s: &Snapshot, now: DateTime<Utc>) -> (&'static str, Tone) {
-    if issue(s, now) == Some(Issue::Error) {
-        return ("panel-error", Tone::Err);
-    }
+/// Green when connected and working, orange while connecting, red otherwise.
+pub fn dot(s: &Snapshot, now: DateTime<Utc>) -> Dot {
     match link(s) {
-        Link::Off => ("panel-off", Tone::Off),
-        Link::Connecting => ("panel-connecting", Tone::Busy),
-        _ => ("panel-on", Tone::On),
-    }
-}
-
-/// Whether the word is in the panel: always, unless the user hid it and it
-/// would only say `ON` or `OFF` (connecting and errors always show).
-pub fn show_chunk(s: &Snapshot, now: DateTime<Utc>, show_status: bool) -> bool {
-    show_status || !matches!(word(s, now).1, Tone::On | Tone::Off)
-}
-
-pub fn icon(s: &Snapshot) -> IconKind {
-    match link(s) {
-        Link::Connected if !s.prefs.exit_node_id.is_empty() => IconKind::Exit,
-        Link::Connected => IconKind::On,
-        Link::Connecting => IconKind::Connecting,
-        _ => IconKind::Off,
+        Link::Connected if issue(s, now) != Some(Issue::Error) => Dot::Green,
+        Link::Connecting => Dot::Orange,
+        _ => Dot::Red,
     }
 }
 
@@ -381,28 +363,28 @@ mod tests {
     }
 
     #[test]
-    fn words_and_dots() {
+    fn status_dot() {
         let s = snap();
-        assert_eq!(word(&s, now()), ("panel-on", Tone::On));
+        assert_eq!(dot(&s, now()), Dot::Green);
         assert_eq!(issue(&s, now()), None);
 
         let minor = Snapshot { health: vec![warning(false)], ..snap() };
         assert_eq!(issue(&minor, now()), None);
-        assert_eq!(word(&minor, now()), ("panel-on", Tone::On));
+        assert_eq!(dot(&minor, now()), Dot::Green);
 
         let broken = Snapshot { health: vec![warning(false), warning(true)], ..snap() };
         assert_eq!(issue(&broken, now()), Some(Issue::Error));
-        assert_eq!(word(&broken, now()), ("panel-error", Tone::Err));
+        assert_eq!(dot(&broken, now()), Dot::Red);
 
         let mut expired = snap();
         key_in(&mut expired, chrono::Duration::hours(-1));
-        assert_eq!(word(&expired, now()), ("panel-error", Tone::Err));
+        assert_eq!(dot(&expired, now()), Dot::Red);
         assert_eq!(key_days_left(&expired, now()), Some(-1));
 
         let mut expiring = snap();
         key_in(&mut expiring, chrono::Duration::days(10));
         assert_eq!(issue(&expiring, now()), Some(Issue::Warning));
-        assert_eq!(word(&expiring, now()), ("panel-on", Tone::On));
+        assert_eq!(dot(&expiring, now()), Dot::Green);
         assert_eq!(key_days_left(&expiring, now()), Some(10));
 
         let mut far = snap();
@@ -410,27 +392,26 @@ mod tests {
         assert_eq!((issue(&far, now()), key_days_left(&far, now())), (None, None));
 
         for state in [1, 2, 3] {
-            assert_eq!(word(&with_state(Some(state)), now()), ("panel-error", Tone::Err));
+            assert_eq!(dot(&with_state(Some(state)), now()), Dot::Red);
         }
-        assert_eq!(word(&Snapshot { reachable: false, ..snap() }, now()), ("panel-error", Tone::Err));
-        assert_eq!(word(&with_state(Some(4)), now()), ("panel-off", Tone::Off));
-        assert_eq!(word(&with_state(Some(5)), now()), ("panel-connecting", Tone::Busy));
+        assert_eq!(dot(&Snapshot { reachable: false, ..snap() }, now()), Dot::Red);
+        assert_eq!(dot(&with_state(Some(4)), now()), Dot::Red);
+        assert_eq!(dot(&with_state(Some(5)), now()), Dot::Orange);
     }
 
     #[test]
     fn health_only_counts_while_connected() {
         // While off or starting, "not connected" warnings are expected, not an error.
         let off = Snapshot { state: Some(4), health: vec![warning(true)], ..snap() };
-        assert_eq!(word(&off, now()), ("panel-off", Tone::Off));
+        assert_eq!(dot(&off, now()), Dot::Red);
         let starting = Snapshot { state: Some(5), health: vec![warning(true)], ..snap() };
-        assert_eq!(word(&starting, now()), ("panel-connecting", Tone::Busy));
+        assert_eq!(dot(&starting, now()), Dot::Orange);
     }
 
     #[test]
-    fn exit_node_dot_and_icon() {
+    fn exit_node_issue() {
         let mut s = Snapshot { status: status("status_exit_node.json"), ..snap() };
         s.prefs.exit_node_id = "nAAAA2CNTRL".into();
-        assert_eq!(icon(&s), IconKind::Exit);
         assert_eq!(exit_name(&s), Some(("bravo".to_owned(), true)));
         assert_eq!(issue(&s, now()), None);
 
@@ -444,21 +425,6 @@ mod tests {
         assert_eq!(issue(&s, now()), None);
 
         assert_eq!(exit_name(&snap()), None);
-        assert_eq!(icon(&snap()), IconKind::On);
-        assert_eq!(icon(&with_state(Some(5))), IconKind::Connecting);
-        assert_eq!(icon(&with_state(Some(4))), IconKind::Off);
-        assert_eq!(icon(&with_state(Some(2))), IconKind::Off);
-    }
-
-    #[test]
-    fn chunk_forced_back() {
-        assert!(show_chunk(&snap(), now(), true));
-        assert!(!show_chunk(&snap(), now(), false));
-        assert!(!show_chunk(&with_state(Some(4)), now(), false));
-        assert!(show_chunk(&with_state(Some(5)), now(), false));
-        assert!(show_chunk(&with_state(Some(2)), now(), false));
-        assert!(show_chunk(&Snapshot { reachable: false, ..snap() }, now(), false));
-        assert!(show_chunk(&Snapshot { health: vec![warning(true)], ..snap() }, now(), false));
     }
 
     #[test]

@@ -31,7 +31,7 @@ install: build
     install -Dm0644 crates/vpn/resources/io.github.dc.CosmicAppletVpn.desktop {{appdir}}/io.github.dc.CosmicAppletVpn.desktop
     install -Dm0755 target/release/cosmic-applet-tailscale {{bindir}}/cosmic-applet-tailscale
     install -Dm0644 crates/tailscale/resources/io.github.dc.CosmicAppletTailscale.desktop {{appdir}}/io.github.dc.CosmicAppletTailscale.desktop
-    for i in off connecting on exit; do install -Dm0644 crates/tailscale/resources/icons/tailscale-mesh-$i-symbolic.svg {{icondir}}/apps/tailscale-mesh-$i-symbolic.svg; done
+    install -Dm0644 crates/tailscale/resources/icons/io.github.dc.CosmicAppletTailscale-symbolic.svg {{icondir}}/apps/io.github.dc.CosmicAppletTailscale-symbolic.svg
     for i in off p2p web both; do install -Dm0644 crates/vpn/resources/icons/vpn-reticle-$i-symbolic.svg {{icondir}}/apps/vpn-reticle-$i-symbolic.svg; done
     install -Dm0644 crates/weather/resources/io.github.dc.CosmicAppletWeather.desktop {{appdir}}/io.github.dc.CosmicAppletWeather.desktop
     install -Dm0644 crates/ai-usage/resources/io.github.dc.CosmicAppletAiUsage.desktop {{appdir}}/io.github.dc.CosmicAppletAiUsage.desktop
@@ -49,7 +49,7 @@ uninstall:
     rm -f {{bindir}}/cosmic-applet-vpn {{appdir}}/io.github.dc.CosmicAppletVpn.desktop
     for i in off p2p web both; do rm -f {{icondir}}/apps/vpn-reticle-$i-symbolic.svg; done
     rm -f {{bindir}}/cosmic-applet-tailscale {{appdir}}/io.github.dc.CosmicAppletTailscale.desktop
-    for i in off connecting on exit; do rm -f {{icondir}}/apps/tailscale-mesh-$i-symbolic.svg; done
+    rm -f {{icondir}}/apps/io.github.dc.CosmicAppletTailscale-symbolic.svg
     rm -f {{appdir}}/io.github.dc.CosmicAppletAiUsage.desktop {{icondir}}/apps/io.github.dc.CosmicAppletAiUsage-symbolic.svg
     rm -f {{appdir}}/io.github.dc.CosmicAppletNetTraffic.desktop {{appdir}}/io.github.dc.CosmicAppletSysMon.desktop
     rm -f {{icondir}}/apps/io.github.dc.CosmicAppletNetTraffic-symbolic.svg {{icondir}}/apps/io.github.dc.CosmicAppletSysMon-symbolic.svg

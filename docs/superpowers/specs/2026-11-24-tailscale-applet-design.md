@@ -192,3 +192,10 @@ Workspace member; `justfile` (`applets`, install, uninstall, `run`, demo recipe)
 ## Left to the builder
 
 Widget breakdown and message types; exact spacing where VPN's DESIGN doesn't already answer it; the icon drawings (show DC before finalising); debounce and backoff constants; how the clipboard and browser are reached (reuse what VPN and AI Usage do).
+
+## Changed after the first install (2026-11-24)
+
+DC installed the first build and asked for two changes, which supersede the Panel and Model sections above where they differ:
+
+- **Panel icon:** Tailscale's own dot-grid mark (DC's SVG) with one status circle over its corner, green when connected, orange while connecting, red when not connected. The `TS ON` word, the mesh glyph, the amber/red issue dot and the `show_status` setting are gone. Non-blocking warnings show in the popup and tooltip only.
+- **Popup rows:** long names wrap inside their columns; nothing may leave the popup or clip an icon.
