@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 VERSION=${1:?version, e.g. 0.3.1}
 export VERSION
 rm -rf dist && mkdir dist
-for applet in net-traffic sysmon ai-usage weather vpn; do
+for applet in net-traffic sysmon ai-usage weather vpn tailscale; do
     for format in deb rpm archlinux; do
         nfpm package --config "packaging/$applet.yaml" --packager "$format" --target dist/
     done

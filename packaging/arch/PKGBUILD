@@ -92,3 +92,14 @@ package_yutani-vpn() {
   install -Dm0644 "$sys/cosmic-vpn-helper.service" -t "$pkgdir/usr/lib/systemd/system"
   install -Dm0644 "$sys/io.github.dc.cosmicvpn.policy" -t "$pkgdir/usr/share/polkit-1/actions"
 }
+
+# Not in `pkgname` until the release that first ships crates/tailscale:
+# add it there together with the pkgver and sha256 bump.
+package_yutani-tailscale() {
+  pkgdesc='Yutani Tailscale: status, on/off switch, exit-node picker and device list (COSMIC applet)'
+  optdepends=('tailscale: the daemon this applet talks to')
+  cd "$(_src)"
+  install -Dm0755 target/release/cosmic-applet-tailscale -t "$pkgdir/usr/bin"
+  install -Dm0644 crates/tailscale/resources/io.github.dc.CosmicAppletTailscale.desktop -t "$pkgdir/usr/share/applications"
+  for i in off connecting on exit; do _icon "crates/tailscale/resources/icons/tailscale-mesh-$i-symbolic.svg" apps; done
+}

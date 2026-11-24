@@ -7,9 +7,9 @@
 
 <br>
 
-**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD, Intel or NVIDIA GPU, memory and disk at a glance; your Claude usage limits and monthly API credits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
+**Six tiny, native COSMIC panel applets: live network traffic; CPU, AMD, Intel or NVIDIA GPU, memory and disk at a glance; your Claude usage limits and monthly API credits; the weather for your cities; a ProtonVPN WireGuard switch with a torrent-only kill switch; and a Tailscale switch with an exit-node picker and device list.**
 
-The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one or two small HTTPS requests every few minutes, with its own Claude sign-in (kept in the system keyring) or Claude Code's existing login, which it never modifies, plus an optional Admin API key for your plan's API credits. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
+The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one or two small HTTPS requests every few minutes, with its own Claude sign-in (kept in the system keyring) or Claude Code's existing login, which it never modifies, plus an optional Admin API key for your plan's API credits. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Tailscale sleeps on the local daemon's event stream and only fetches the device list while its popup is open. Each applet costs about 0.1 % of one core.
 
 [![Rust](https://img.shields.io/badge/Rust-2024-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![COSMIC](https://img.shields.io/badge/COSMIC-1.10-3b82f6)](https://system76.com/cosmic)
@@ -38,6 +38,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | 🖥️ | **System Monitor** | CPU, AMD, Intel or NVIDIA GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
 | 🤖 | **AI Usage** | Claude's Session (7-day, all models) and Fable limits as small bars in the panel, with reset times and pace in the popup, plus this month's spend of the API credits that come with Max, Ultra and Team plans. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
 | 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
+| 🔗 | **Tailscale** | Connected, connecting, off or needs attention at a glance; a popup with the on/off switch, an exit-node picker, this device's address and name, health warnings, and every device in the tailnet with one-click copy. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
 
 They are separate applets, each with its own panel slot, settings and process. Add any combination.
@@ -58,6 +59,7 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 🌐 | **Anthropic only, no telemetry** | AI Usage talks only to Anthropic over rustls (`api.anthropic.com`, plus `platform.claude.com` to renew its own sign-in) and caches no usage or spend on disk. Its own login and the optional Admin API key live in the keyring; Claude Code's token is held only for the length of a request. |
 | 🗝️ | **Key in the keyring** | Weather keeps your OpenWeather key in the Secret Service keyring (a 0600 file only if there's none), never in config or logs, and talks only to `api.openweathermap.org`. |
 | 🔑 | **Hands off your login** | AI Usage has its own Claude sign-in that renews itself, and opens Claude Code's credentials read-only, so it can't log Claude Code out. |
+| 🔌 | **Tailscale's own socket** | The Tailscale applet speaks HTTP to `tailscaled`'s local API on its Unix socket, with hyper: no `tailscale` CLI calls, no TLS, no network requests of its own, and no timer while the popup is closed. |
 | 🔒 | **No privileges, except one helper** | The applets never call `sudo` or `pkexec` or write to sysfs; root-only counters show `—`. The one exception is VPN's torrent tunnel: a small D-Bus-activated root helper, sandboxed by systemd and guarded by polkit, that only builds the namespace and starts qBittorrent in it. |
 
 Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the system applets; 6 min, startup included, for AI Usage; 60 s for VPN):
@@ -69,6 +71,7 @@ Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the s
 | AI Usage | ~0.1 % of one core (one or two requests every 5 min) | 31.2 MB |
 | Weather | idle between refreshes (one city every 30 min) | 32.7 MB |
 | VPN | ~0.1 % of one core (both tunnels off) | 30.5 MB |
+| Tailscale | *to be measured on the live panel* | *to be measured* |
 | *stock COSMIC clock applet* | – | 28.8 MB |
 
 ---
@@ -245,6 +248,34 @@ and import both configs from the applet's settings. Importing the torrent config
 
 ---
 
+## 🔗 Tailscale
+
+*No screenshots yet; `just tailscale-demo` shows every state.*
+
+A panel switch for [Tailscale](https://tailscale.com/), in the spirit of [trayscale](https://github.com/DeedleFake/trayscale) but native to COSMIC:
+
+- 🎯 **Panel:** a mesh glyph (open nodes when off, one filled while connecting, all filled when connected, an arrow leaving the mesh when an exit node is in use) and a `TS` word that reads `ON`, `…`, `OFF` or `ERR`, in a cell that never changes width. A red dot and `ERR` mean it can't connect (not signed in, the daemon isn't running, the key expired, or a health warning that breaks connectivity); an amber dot means it works but wants a look (key expiring within 14 days, or the chosen exit node is offline). The word can be hidden; it comes back by itself while connecting or in error.
+- 🔘 **Switch:** on and off, usable while connecting so a start that hangs can be cancelled.
+- 🚪 **Exit node:** the one in use, and a picker with None, the daemon's recommendation, and every device that offers one (offline ones listed but not selectable). Location-based exit nodes are grouped by country, with search once there are more than 8. **Allow local network access** keeps printers and the like reachable.
+- 💻 **This device:** its name, Tailscale address and MagicDNS name, each with a copy button.
+- 🧭 **Devices:** everything else in the tailnet, online first, with how each is reached (Direct, Relay · region, Peer relay, Idle, or when it was last seen). Click one to copy its address (or its name, your choice). Search appears past 8 devices.
+- ⚠️ **Warnings:** Tailscale's own health messages are listed in the popup. Ones that don't affect connectivity never raise a dot.
+- 💤 **Light:** the applet holds one connection to the daemon's event stream and sleeps on it. The device list is fetched when something changes and every 5 s only while the popup is open.
+
+**One-time setup:** Tailscale lets any user read its status but only its *operator* change settings. Run this once, or the switch and picker stay disabled (the popup shows the same command with a copy button):
+
+```sh
+sudo tailscale set --operator=$USER
+```
+
+Signing in for the first time is still `sudo tailscale up` (see Tailscale's [quickstart](https://tailscale.com/docs/how-to/quickstart)); after that, **Sign in** in the popup opens the login page when a session expires.
+
+`just tailscale-status` prints what the applet makes of the daemon as text (state, operator, exit node, device count), which also works over SSH with no COSMIC session. `just tailscale-demo` runs the popup in a window, cycling through every state every 8 s from the test fixtures, with no daemon (`TAILSCALE_DEMO_SCENE=n` starts on scene *n*; `TAILSCALE_SHOT=file.pam` saves the window and exits).
+
+Not in this version: Taildrop, switching accounts, Serve/Funnel, and toggles for accepting routes, SSH or advertising this machine as an exit node.
+
+---
+
 ## 📦 Install
 
 ### Packages
@@ -257,9 +288,9 @@ sudo dnf install ./yutani-sysmon-*.x86_64.rpm               # Fedora
 sudo pacman -U yutani-sysmon-*-x86_64.pkg.tar.zst           # Arch, CachyOS, Manjaro
 ```
 
-Swap `sysmon` for `net-traffic`, `ai-usage`, `weather` or `vpn`. `yutani-vpn` includes the root helper and its D-Bus, systemd and polkit files, so `just vpn-helper-install` isn't needed. Releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed; `packaging/build.sh <version>` builds the same packages locally (needs [nfpm](https://nfpm.goreleaser.com/)).
+Swap `sysmon` for `net-traffic`, `ai-usage`, `weather`, `vpn` or `tailscale`. `yutani-vpn` includes the root helper and its D-Bus, systemd and polkit files, so `just vpn-helper-install` isn't needed. Releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed; `packaging/build.sh <version>` builds the same packages locally (needs [nfpm](https://nfpm.goreleaser.com/)).
 
-**Arch from source:** `packaging/arch/PKGBUILD` builds all five from the release's source with your own compiler flags (CachyOS's included) as a split package, so `makepkg` produces one `.pkg.tar.zst` per applet and you install only the ones you want:
+**Arch from source:** `packaging/arch/PKGBUILD` builds them all from the release's source with your own compiler flags (CachyOS's included) as a split package, so `makepkg` produces one `.pkg.tar.zst` per applet and you install only the ones you want:
 
 ```sh
 git clone https://github.com/dc9090-web/yutani-sysmon
@@ -279,7 +310,7 @@ just build
 sudo just install           # → /usr/local
 ```
 
-Then add **Yutani Network Traffic**, **Yutani System Monitor**, **Yutani AI Usage**, **Yutani Weather** and/or **Yutani VPN** in *Settings → Desktop → Panel → Applets* (search for *Yutani* to list them all).
+Then add **Yutani Network Traffic**, **Yutani System Monitor**, **Yutani AI Usage**, **Yutani Weather**, **Yutani VPN** and/or **Yutani Tailscale** in *Settings → Desktop → Panel → Applets* (search for *Yutani* to list them all).
 
 <details>
 <summary>Installing without root</summary>
@@ -291,7 +322,7 @@ PREFIX=~/.local just install
 cosmic-panel launches applets with the session `PATH`, which usually lacks `~/.local/bin`. Point the desktop entries at the binaries:
 
 ```sh
-sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon,AiUsage,Weather,Vpn}.desktop
+sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.dc.CosmicApplet{NetTraffic,SysMon,AiUsage,Weather,Vpn,Tailscale}.desktop
 ```
 </details>
 
@@ -310,6 +341,8 @@ sed -i "s|^Exec=|Exec=$HOME/.local/bin/|" ~/.local/share/applications/io.github.
 | `just vpn-check-conf <files>` | VPN: what the parser makes of your Proton configs, key never shown |
 | `just vpn-helper-install` / `vpn-helper-uninstall` | VPN's root helper and its system files (sudo) |
 | `just vpn-acceptance` | VPN: live leak and kill-switch checks against a running torrent tunnel (sudo) |
+| `just tailscale-demo` | Tailscale's popup cycling through every state, without a daemon |
+| `just tailscale-status` | Tailscale: the daemon's state as the applet reads it, as text |
 
 ---
 
@@ -323,6 +356,7 @@ Changes apply instantly and are saved by cosmic-config, with no Save button. Ext
 | System Monitor | `~/.config/cosmic/io.github.dc.CosmicAppletSysMon/v1/` | `show_cpu`, `show_gpu`, `show_mem`, `show_disk`, `style`, `disk`, `gpu` |
 | AI Usage | `~/.config/cosmic/io.github.dc.CosmicAppletAiUsage/v1/` | `icon`, `show_weekly`, `show_fable`, `show_credits`, `show_weekly_reset`, `style`, `amount`, `reset_format`, `refresh_minutes`, `credit_dollars`, `credit_renew_day` (the Admin key is in the keyring, never here) |
 | VPN | `~/.config/cosmic/io.github.dc.CosmicAppletVpn/v1/` | `p2p_conf`, `web_conf`, `web_nm_uuid`, `launch_qbit`, `quit_qbit`, `auto_port`, `webui_port`, `webui_user`, `show_port`, `show_p2p_off`, `show_web_off`, `restore`, `last_p2p`, `last_web`, `qbit_command`, `icon_style` (no keys or passwords) |
+| Tailscale | `~/.config/cosmic/io.github.dc.CosmicAppletTailscale/v1/` | `show_status`, `show_offline`, `copy` |
 | Weather | `~/.config/cosmic/io.github.dc.CosmicAppletWeather/v1/` | `locations`, `panel_location`, `units`, `icon_set`, `show_city`, `show_hilo`, `refresh_minutes` (the API key is in the keyring, never here) |
 
 ---
@@ -339,11 +373,12 @@ crates/
   vpn/           the VPN applet              (cosmic-applet-vpn)
   vpn-helper/    its root helper             (cosmic-vpn-helper) and system files
   vpn-common/    shared: Proton conf parser, NAT-PMP codec, status types
+  tailscale/     the Tailscale applet        (cosmic-applet-tailscale)
 handoff/         the original design and spec packages (SPEC, DESIGN, ACCEPTANCE, prototype, screenshots)
 docs/            README images
 ```
 
-The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSysMon`, `io.github.dc.CosmicAppletAiUsage`, `io.github.dc.CosmicAppletWeather`, `io.github.dc.CosmicAppletVpn` and `io.github.dc.CosmicVpnHelper` are placeholders and should be changed before publishing to a distro.
+The App IDs `io.github.dc.CosmicAppletNetTraffic`, `io.github.dc.CosmicAppletSysMon`, `io.github.dc.CosmicAppletAiUsage`, `io.github.dc.CosmicAppletWeather`, `io.github.dc.CosmicAppletVpn`, `io.github.dc.CosmicAppletTailscale` and `io.github.dc.CosmicVpnHelper` are placeholders and should be changed before publishing to a distro.
 
 ---
 

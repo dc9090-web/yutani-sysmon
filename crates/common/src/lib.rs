@@ -1,4 +1,4 @@
-//! Code shared by the Network Traffic and System Monitor applets.
+//! Code shared by the applets.
 
 pub mod format;
 pub mod graph;
