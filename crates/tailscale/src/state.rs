@@ -51,6 +51,8 @@ pub enum Banner {
     KeyExpiring(i64),
     /// The last request failed.
     Error(String),
+    /// A health warning that stops traffic.
+    Problem(String),
     Health(String),
     /// Further health warnings, not listed.
     HealthMore(usize),
@@ -245,14 +247,16 @@ impl State {
         if let Some(e) = &self.last_error {
             v.push(Banner::Error(e.clone()));
         }
-        // The bus's warnings when it has sent any, else the status reply's.
-        let health: Vec<&str> = if self.snap.health.is_empty() {
-            self.snap.status.health.iter().map(String::as_str).collect()
+        // The bus's warnings when it has sent any (those say which ones stop
+        // traffic; they go first), else the status reply's plain strings.
+        let mut health: Vec<(bool, &str)> = if self.snap.health.is_empty() {
+            self.snap.status.health.iter().map(|t| (false, t.as_str())).collect()
         } else {
-            self.snap.health.iter().map(|w| w.text.as_str()).collect()
+            self.snap.health.iter().map(|w| (w.impacts_connectivity && link == Link::Connected, w.text.as_str())).collect()
         };
-        let health: Vec<&str> = health.into_iter().filter(|t| !t.is_empty()).collect();
-        v.extend(health.iter().take(HEALTH_SHOWN).map(|t| Banner::Health((*t).to_owned())));
+        health.retain(|(_, t)| !t.is_empty());
+        health.sort_by_key(|(serious, _)| !serious);
+        v.extend(health.iter().take(HEALTH_SHOWN).map(|&(serious, t)| if serious { Banner::Problem(t.to_owned()) } else { Banner::Health(t.to_owned()) }));
         if health.len() > HEALTH_SHOWN {
             v.push(Banner::HealthMore(health.len() - HEALTH_SHOWN));
         }
@@ -425,8 +429,8 @@ mod tests {
         assert_eq!(
             s.banners(now()),
             [
-                Banner::Health("Some peers are advertising routes but --accept-routes is false".into()),
-                Banner::Health("Tailscale could not connect to any relay server.".into())
+                Banner::Problem("Tailscale could not connect to any relay server.".into()),
+                Banner::Health("Some peers are advertising routes but --accept-routes is false".into())
             ]
         );
     }

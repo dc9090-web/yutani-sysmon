@@ -19,6 +19,7 @@ tooltip-attention = · needs attention
 title = Tailscale
 head-connected = Connected
 head-connected-tailnet = Connected · { $tailnet }
+head-trouble = Connected, but not working
 head-connecting = Connecting…
 head-off = Off
 head-login = Sign-in needed

@@ -310,6 +310,24 @@ mod tests {
         assert_eq!(suggest_exit_node_at(&path).await.unwrap().unwrap().id, "nAAAA2CNTRL");
     }
 
+    /// Against the real daemon: flips "allow LAN access" and puts it back.
+    /// It never touches the on/off switch or the exit node, so a session
+    /// reaching this machine over Tailscale is not cut.
+    /// `cargo test -p cosmic-applet-tailscale live_writes -- --ignored`
+    #[tokio::test]
+    #[ignore = "writes to the real tailscaled; needs this user to be its operator"]
+    async fn live_writes() {
+        let before = match patch_prefs(MaskedPrefs::default()).await {
+            Ok(p) => p,
+            Err(ApiError::Denied) => panic!("refused: this user isn't the operator; run `sudo tailscale set --operator=$USER` first"),
+            Err(e) => panic!("{e:?}"),
+        };
+        let flipped = patch_prefs(MaskedPrefs::allow_lan(!before.exit_node_allow_lan)).await.unwrap();
+        assert_eq!(flipped.exit_node_allow_lan, !before.exit_node_allow_lan);
+        let restored = patch_prefs(MaskedPrefs::allow_lan(before.exit_node_allow_lan)).await.unwrap();
+        assert_eq!(restored, before);
+    }
+
     fn states(events: &[BusEvent]) -> Vec<Option<u8>> {
         events.iter().map(|e| if let BusEvent::Notify(n) = e { n.state } else { None }).collect()
     }

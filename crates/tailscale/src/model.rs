@@ -154,8 +154,10 @@ pub fn icon(s: &Snapshot) -> IconKind {
 }
 
 /// The header caption's `.ftl` key and tone.
-pub fn header(s: &Snapshot) -> (&'static str, Option<Tone>) {
+pub fn header(s: &Snapshot, now: DateTime<Utc>) -> (&'static str, Option<Tone>) {
     match link(s) {
+        // Running, but an expired key or a health problem stops traffic.
+        Link::Connected if issue(s, now) == Some(Issue::Error) => ("head-trouble", Some(Tone::Err)),
         Link::Connected => ("head-connected", Some(Tone::On)),
         Link::Connecting => ("head-connecting", Some(Tone::Busy)),
         Link::Off => ("head-off", None),
@@ -461,13 +463,18 @@ mod tests {
 
     #[test]
     fn headers() {
-        assert_eq!(header(&snap()), ("head-connected", Some(Tone::On)));
-        assert_eq!(header(&with_state(Some(5))), ("head-connecting", Some(Tone::Busy)));
-        assert_eq!(header(&with_state(Some(4))), ("head-off", None));
-        assert_eq!(header(&with_state(Some(2))), ("head-login", Some(Tone::Err)));
-        assert_eq!(header(&with_state(Some(3))), ("head-approval", Some(Tone::Err)));
-        assert_eq!(header(&with_state(Some(1))), ("head-other-user", Some(Tone::Err)));
-        assert_eq!(header(&Snapshot { reachable: false, ..snap() }), ("head-unavailable", Some(Tone::Err)));
+        assert_eq!(header(&snap(), now()), ("head-connected", Some(Tone::On)));
+        // Connected on paper, but something stops traffic: the caption says so, like the panel.
+        assert_eq!(header(&Snapshot { health: vec![warning(true)], ..snap() }, now()), ("head-trouble", Some(Tone::Err)));
+        let mut expired = snap();
+        key_in(&mut expired, chrono::Duration::hours(-1));
+        assert_eq!(header(&expired, now()), ("head-trouble", Some(Tone::Err)));
+        assert_eq!(header(&with_state(Some(5)), now()), ("head-connecting", Some(Tone::Busy)));
+        assert_eq!(header(&with_state(Some(4)), now()), ("head-off", None));
+        assert_eq!(header(&with_state(Some(2)), now()), ("head-login", Some(Tone::Err)));
+        assert_eq!(header(&with_state(Some(3)), now()), ("head-approval", Some(Tone::Err)));
+        assert_eq!(header(&with_state(Some(1)), now()), ("head-other-user", Some(Tone::Err)));
+        assert_eq!(header(&Snapshot { reachable: false, ..snap() }, now()), ("head-unavailable", Some(Tone::Err)));
     }
 
     #[test]

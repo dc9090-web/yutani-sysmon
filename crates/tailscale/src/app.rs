@@ -264,10 +264,10 @@ impl App {
 
     fn header(&self) -> Element<'_, Message> {
         let link = model::link(&self.st.snap);
-        let (key, tone) = model::header(&self.st.snap);
+        let (key, tone) = model::header(&self.st.snap, self.now());
         let suffix = self.st.snap.status.tailnet.as_ref().map(|t| t.magic_dns_suffix.clone()).filter(|s| !s.is_empty());
         let caption = match (link, suffix) {
-            (Link::Connected, Some(tailnet)) => fl!("head-connected-tailnet", tailnet = tailnet),
+            (Link::Connected, Some(tailnet)) if key == "head-connected" => fl!("head-connected-tailnet", tailnet = tailnet),
             _ => fl_key(key),
         };
         let ink = tone.map_or(Ink::Muted, tone_ink);
@@ -304,6 +304,7 @@ impl App {
             Banner::KeyExpiring(0) => note(fl!("key-expiring-today"), Ink::Warning),
             Banner::KeyExpiring(days) => note(fl!("key-expiring", days = days), Ink::Warning),
             Banner::Error(text) => note(if text.is_empty() { fl!("err-timeout") } else { fl!("err-request", text = text) }, Ink::Destructive),
+            Banner::Problem(text) => note(text, Ink::Destructive),
             Banner::Health(text) => note(text, Ink::Muted),
             Banner::HealthMore(count) => widget::container(widget::text::caption(fl!("health-more", count = count)).class(Ink::Muted.text()))
                 .padding([0, space_m(), space_xxs(), space_m() + 16 + space_xs()])
@@ -539,6 +540,7 @@ fn fl_key(key: &str) -> String {
         "panel-connecting" => fl!("panel-connecting"),
         "panel-error" => fl!("panel-error"),
         "head-connected" => fl!("head-connected"),
+        "head-trouble" => fl!("head-trouble"),
         "head-connecting" => fl!("head-connecting"),
         "head-off" => fl!("head-off"),
         "head-login" => fl!("head-login"),
@@ -566,18 +568,20 @@ fn copy_button<'a>(text: String) -> Element<'a, Message> {
     widget::button::icon(widget::icon::from_name("edit-copy-symbolic").size(14)).on_press(Message::Copy(text)).tooltip(fl!("copy")).into()
 }
 
-/// A notice that ends in a command to run, with a copy button.
+/// A notice that ends in a command to run. The copy button sits by the
+/// title so the command has the box's full width.
 fn command_banner<'a>(title: String, body: String, command: String) -> Element<'a, Message> {
-    let line = Row::new()
+    let head = Row::new()
         .spacing(space_xs())
         .align_y(Alignment::Center)
-        .push(widget::container(mono(command.clone(), Type::new(12.0, 17.0), Weight::Normal, None)).width(Length::Fill))
-        .push(copy_button(command));
-    let col = Column::new()
-        .spacing(space_xxs())
-        .push(widget::text::body(title).font(cosmic::font::semibold()))
-        .push(widget::text::caption(body).class(Ink::Muted.text()))
-        .push(line);
+        .push(widget::text::body(title).font(cosmic::font::semibold()).width(Length::Fill))
+        .push(copy_button(command.clone()));
+    let col = Column::new().spacing(space_xxs()).push(head).push(widget::text::caption(body).class(Ink::Muted.text())).push(mono(
+        command,
+        Type::new(12.0, 17.0),
+        Weight::Normal,
+        None,
+    ));
     widget::container(boxed(col.into())).padding([space_xxs(), space_m()]).into()
 }
 
