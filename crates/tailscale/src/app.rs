@@ -23,12 +23,10 @@ use crate::config::{APP_ID, Config, CopyWhat};
 use crate::fl;
 use crate::model::{self, Conn, Device, ExitOption, Link};
 use crate::preview;
-use crate::state::{BUSY_LIMIT, Banner, Busy, Page, State, copy_text};
+use crate::state::{BUSY_LIMIT, Banner, Busy, Page, State, copy_text, fetch_delay};
 use crate::widgets::glyph::glyph;
 use crate::widgets::panel::{self, Chunk, tone_ink};
 
-/// After a bus event, the status is fetched once things have settled.
-const FETCH_DEBOUNCE: Duration = Duration::from_millis(500);
 /// How often the device list is refreshed while the popup is open.
 const REFRESH: Duration = Duration::from_secs(5);
 const TOAST: Duration = Duration::from_millis(1400);
@@ -162,8 +160,9 @@ impl App {
             return Task::none();
         }
         self.fetch_pending = true;
-        cosmic::task::future(async {
-            tokio::time::sleep(FETCH_DEBOUNCE).await;
+        let delay = fetch_delay(self.popup.is_some() || preview());
+        cosmic::task::future(async move {
+            tokio::time::sleep(delay).await;
             Message::FetchStatus
         })
     }

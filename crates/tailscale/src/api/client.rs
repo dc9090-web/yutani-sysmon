@@ -15,10 +15,15 @@ use tokio::net::UnixStream;
 use super::types::{MaskedPrefs, Notify, Prefs, Status, Suggestion};
 
 const DEFAULT_SOCKET: &str = "/var/run/tailscale/tailscaled.sock";
-/// Initial state, initial prefs and initial health (`ipn.NotifyWatchOpt` bits 1, 2 and 7).
-const BUS_MASK: u32 = 2 | 4 | 128;
+/// Initial state, initial prefs, initial health, and peer changes
+/// (`ipn.NotifyWatchOpt` bits 1, 2, 7 and 12). Without the last, a device
+/// going on or offline says nothing on the bus.
+const BUS_MASK: u32 = 2 | 4 | 128 | 4096;
 const RETRY_MIN: Duration = Duration::from_secs(1);
-const RETRY_MAX: Duration = Duration::from_secs(30);
+/// Low, so a daemon that comes back is noticed promptly; a failed connect to a Unix socket costs nothing.
+const RETRY_MAX: Duration = Duration::from_secs(5);
+/// A request with no reply after this long is treated as no daemon.
+const REQUEST_LIMIT: Duration = Duration::from_secs(10);
 /// A bus line longer than this is not one we understand: drop the connection.
 const LINE_LIMIT: usize = 8 << 20;
 const ERROR_TEXT: usize = 120;
@@ -60,7 +65,7 @@ pub async fn suggest_exit_node() -> Result<Option<Suggestion>, ApiError> {
 
 /// Starts a sign-in; the URL to open then arrives on the bus.
 pub async fn login_interactive() -> Result<(), ApiError> {
-    read(send(&socket_path(), Method::POST, "login-interactive", None).await?).await.map(drop)
+    call(&socket_path(), Method::POST, "login-interactive", None).await.map(drop)
 }
 
 pub fn watch() -> impl Stream<Item = BusEvent> {
@@ -83,6 +88,17 @@ async fn send(socket: &Path, method: Method, endpoint: &str, body: Option<String
     sender.send_request(request).await.map_err(|_| ApiError::Unavailable)
 }
 
+/// A request and its whole reply, within `REQUEST_LIMIT`.
+async fn call(socket: &Path, method: Method, endpoint: &str, body: Option<String>) -> Result<Bytes, ApiError> {
+    let exchange = async { read(send(socket, method, endpoint, body).await?).await };
+    tokio::time::timeout(REQUEST_LIMIT, exchange).await.unwrap_or(Err(ApiError::Unavailable))
+}
+
+/// The wait before the next connection attempt: 1 s, doubling to `RETRY_MAX`.
+fn next_retry(previous: Option<Duration>) -> Duration {
+    previous.map_or(RETRY_MIN, |w| (w * 2).min(RETRY_MAX))
+}
+
 /// The body of a 2xx reply; other statuses become errors.
 async fn read(response: Response<Incoming>) -> Result<Bytes, ApiError> {
     let code = response.status();
@@ -101,16 +117,16 @@ fn parse<T: serde::de::DeserializeOwned>(body: &[u8]) -> Result<T, ApiError> {
 }
 
 async fn status_at(socket: &Path) -> Result<Status, ApiError> {
-    parse(&read(send(socket, Method::GET, "status", None).await?).await?)
+    parse(&call(socket, Method::GET, "status", None).await?)
 }
 
 async fn patch_prefs_at(socket: &Path, prefs: MaskedPrefs) -> Result<Prefs, ApiError> {
     let body = serde_json::to_string(&prefs).expect("prefs serialise");
-    parse(&read(send(socket, Method::PATCH, "prefs", Some(body)).await?).await?)
+    parse(&call(socket, Method::PATCH, "prefs", Some(body)).await?)
 }
 
 async fn suggest_exit_node_at(socket: &Path) -> Result<Option<Suggestion>, ApiError> {
-    match read(send(socket, Method::GET, "suggest-exit-node", None).await?).await {
+    match call(socket, Method::GET, "suggest-exit-node", None).await {
         Ok(body) => Ok(parse::<Suggestion>(&body).ok().filter(|s| !s.id.is_empty())),
         Err(ApiError::Unavailable) => Err(ApiError::Unavailable),
         Err(_) => Ok(None),
@@ -136,7 +152,7 @@ impl Watch {
                 if let Some(wait) = self.retry {
                     tokio::time::sleep(wait).await;
                 }
-                self.retry = Some(self.retry.map_or(RETRY_MIN, |w| (w * 2).min(RETRY_MAX)));
+                self.retry = Some(next_retry(self.retry));
                 match send(&self.socket, Method::GET, &format!("watch-ipn-bus?mask={BUS_MASK}"), None).await {
                     Ok(r) if r.status().is_success() => self.body = Some(r.into_body()),
                     _ => return BusEvent::Down,
@@ -176,7 +192,7 @@ impl Watch {
 }
 
 /// The event bus as an endless stream. When it can't connect or the
-/// connection ends it yields `Down`, then retries after 1 s, doubling to 30 s.
+/// connection ends it yields `Down`, then retries after 1 s, doubling to 5 s.
 fn watch_at(socket: PathBuf) -> impl Stream<Item = BusEvent> {
     let watch = Watch { socket, body: None, buf: Vec::new(), ready: VecDeque::new(), retry: None };
     futures_util::stream::unfold(watch, |mut w| async move { Some((w.next().await, w)) })
@@ -328,6 +344,19 @@ mod tests {
         assert_eq!(restored, before);
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn a_daemon_that_never_answers_is_given_up_on() {
+        let (path, _reqs) = serve(vec![vec![]], true);
+        assert_eq!(status_at(&path).await, Err(ApiError::Unavailable));
+    }
+
+    #[test]
+    fn retry_backs_off_but_stays_prompt() {
+        // A daemon that comes back is noticed within seconds, not half a minute.
+        let waits: Vec<u64> = std::iter::successors(Some(next_retry(None)), |w| Some(next_retry(Some(*w)))).take(5).map(|w| w.as_secs()).collect();
+        assert_eq!(waits, [1, 2, 4, 5, 5]);
+    }
+
     fn states(events: &[BusEvent]) -> Vec<Option<u8>> {
         events.iter().map(|e| if let BusEvent::Notify(n) = e { n.state } else { None }).collect()
     }
@@ -340,7 +369,7 @@ mod tests {
         let (path, mut reqs) = serve(vec![vec![CHUNKED.into(), chunk(a), chunk(&format!("{b}\nnot json\n")), chunk(&format!("{second}\n"))]], true);
         let events: Vec<BusEvent> = watch_at(path).take(2).collect().await;
         assert_eq!(states(&events), [Some(5), Some(6)]);
-        assert!(reqs.recv().await.unwrap().starts_with("GET /localapi/v0/watch-ipn-bus?mask=134 HTTP/1.1\r\n"));
+        assert!(reqs.recv().await.unwrap().starts_with("GET /localapi/v0/watch-ipn-bus?mask=4230 HTTP/1.1\r\n"));
     }
 
     #[tokio::test(start_paused = true)]

@@ -36,7 +36,10 @@ signin-title = Sign-in needed
 signin-body = This device isn't signed in to a tailnet.
 signin-button = Sign in
 key-expired = This device's key has expired. Sign in again to reconnect.
-key-expiring = This device's key expires in { $days } days.
+key-expiring = { $days ->
+    [one] This device's key expires tomorrow.
+   *[other] This device's key expires in { $days } days.
+}
 key-expiring-today = This device's key expires today.
 health-more = +{ $count } more
 err-timeout = Tailscale didn't answer. Try again.

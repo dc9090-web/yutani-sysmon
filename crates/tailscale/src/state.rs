@@ -12,6 +12,12 @@ use crate::model::{self, Device, Link, Snapshot};
 
 /// A request with no answer after this long is given up on.
 pub const BUSY_LIMIT: Duration = Duration::from_secs(20);
+/// How long after a bus event the status is fetched: soon while the popup
+/// shows it, lazily while only the panel's dot and tooltip depend on it.
+pub fn fetch_delay(popup_open: bool) -> Duration {
+    if popup_open { Duration::from_millis(500) } else { Duration::from_secs(5) }
+}
+
 /// A sign-in URL is only opened this soon after the user asked to sign in.
 const LOGIN_WINDOW: Duration = Duration::from_secs(60);
 /// Health warnings listed before "+N more".
@@ -301,6 +307,12 @@ mod tests {
         assert!(s.apply(notify(6, "daniel")));
         s.snap.status = serde_json::from_str(&fixture("status_running.json")).unwrap();
         s
+    }
+
+    #[test]
+    fn status_follows_events_quickly_only_while_watched() {
+        assert_eq!(fetch_delay(true), Duration::from_millis(500));
+        assert_eq!(fetch_delay(false), Duration::from_secs(5));
     }
 
     #[test]
