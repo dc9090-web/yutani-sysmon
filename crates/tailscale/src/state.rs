@@ -230,7 +230,9 @@ impl State {
         let mut v = Vec::new();
         // Before the first prefs arrive there is nothing to judge the operator by.
         if self.snap.state.is_some() && !self.can_write() {
-            v.push(Banner::Operator { command: format!("sudo tailscale set --operator={}", self.user) });
+            // With no name to fill in, the shell's own variable does the job.
+            let user = if self.user.is_empty() { "$USER" } else { &self.user };
+            v.push(Banner::Operator { command: format!("sudo tailscale set --operator={user}") });
         }
         if link == Link::NeedsLogin {
             v.push(Banner::SignIn);
@@ -435,6 +437,13 @@ mod tests {
         s.apply(notify(6, ""));
         assert!(s.can_write());
         assert!(s.banners(now()).is_empty());
+    }
+
+    #[test]
+    fn unknown_user_gets_a_command_that_still_works() {
+        let mut s = State::new(String::new(), 1000);
+        s.apply(notify(6, ""));
+        assert_eq!(s.banners(now()), [Banner::Operator { command: "sudo tailscale set --operator=$USER".into() }]);
     }
 
     #[test]

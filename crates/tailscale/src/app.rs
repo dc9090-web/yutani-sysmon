@@ -98,7 +98,7 @@ pub struct App {
     demo_now: Option<DateTime<Utc>>,
 }
 
-fn current_user() -> (String, u32) {
+pub(crate) fn current_user() -> (String, u32) {
     let uid = nix::unistd::getuid();
     let name = nix::unistd::User::from_uid(uid).ok().flatten().map(|u| u.name).or_else(|| std::env::var("USER").ok()).unwrap_or_default();
     (name, uid.as_raw())
