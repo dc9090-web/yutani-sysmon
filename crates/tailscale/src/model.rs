@@ -244,7 +244,9 @@ pub fn devices(st: &Status, query: &str, show_offline: bool) -> Vec<Device> {
     let q = query.trim().to_lowercase();
     let mut list: Vec<Device> = own(st)
         .filter(|p| show_offline || p.online)
-        .filter(|p| q.is_empty() || peer_name(p).to_lowercase().contains(&q) || p.dns_name.to_lowercase().contains(&q) || p.ips.iter().any(|ip| ip.contains(&q)))
+        .filter(|p| {
+            q.is_empty() || peer_name(p).to_lowercase().contains(&q) || p.dns_name.to_lowercase().contains(&q) || p.ips.iter().any(|ip| ip.contains(&q))
+        })
         .map(device)
         .collect();
     list.sort_by(|a, b| by_presence_then_name((a.online, &a.name), (b.online, &b.name)));
@@ -297,7 +299,9 @@ pub fn exit_groups(st: &Status, query: &str) -> Vec<ExitGroup> {
     for p in st.peers.iter().filter(|p| p.exit_node_option) {
         let name = peer_name(p);
         let loc = p.location.as_ref();
-        let hit = q.is_empty() || name.to_lowercase().contains(&q) || loc.is_some_and(|l| l.city.to_lowercase().contains(&q) || l.country.to_lowercase().contains(&q));
+        let hit = q.is_empty()
+            || name.to_lowercase().contains(&q)
+            || loc.is_some_and(|l| l.city.to_lowercase().contains(&q) || l.country.to_lowercase().contains(&q));
         if hit {
             let option = ExitOption { id: p.id.clone(), name, caption: loc.map(|l| l.city.clone()), online: p.online, last_seen: p.last_seen };
             groups.entry(loc.map(|l| l.country.clone())).or_default().push(option);
@@ -308,7 +312,8 @@ pub fn exit_groups(st: &Status, query: &str) -> Vec<ExitGroup> {
         .into_iter()
         .map(|(heading, mut options)| {
             options.sort_by(|a, b| {
-                by_presence_then_name((a.online, a.caption.as_deref().unwrap_or(&a.name)), (b.online, b.caption.as_deref().unwrap_or(&b.name))).then_with(|| a.name.cmp(&b.name))
+                by_presence_then_name((a.online, a.caption.as_deref().unwrap_or(&a.name)), (b.online, b.caption.as_deref().unwrap_or(&b.name)))
+                    .then_with(|| a.name.cmp(&b.name))
             });
             ExitGroup { heading, options }
         })
@@ -335,7 +340,13 @@ mod tests {
 
     /// Connected, with the running fixture.
     fn snap() -> Snapshot {
-        Snapshot { reachable: true, state: Some(6), prefs: Prefs { want_running: true, ..Prefs::default() }, health: Vec::new(), status: status("status_running.json") }
+        Snapshot {
+            reachable: true,
+            state: Some(6),
+            prefs: Prefs { want_running: true, ..Prefs::default() },
+            health: Vec::new(),
+            status: status("status_running.json"),
+        }
     }
 
     fn with_state(state: Option<u8>) -> Snapshot {

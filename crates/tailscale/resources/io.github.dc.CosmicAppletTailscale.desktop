@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Yutani Tailscale
+Comment=Tailscale status, on/off switch, exit nodes and devices
+Type=Application
+Exec=cosmic-applet-tailscale
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Applet;Yutani;Tailscale;VPN;WireGuard;Tailnet;Exit node;Mesh;
+Icon=tailscale-mesh-on-symbolic
+StartupNotify=true
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

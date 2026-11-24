@@ -204,7 +204,13 @@ impl MaskedPrefs {
 
     /// `""` clears the exit node. The IP form is cleared too, so the ID is the only selector.
     pub fn exit_node(id: &str) -> Self {
-        Self { exit_node_id: Some(id.to_owned()), exit_node_id_set: Some(true), exit_node_ip: Some(String::new()), exit_node_ip_set: Some(true), ..Self::default() }
+        Self {
+            exit_node_id: Some(id.to_owned()),
+            exit_node_id_set: Some(true),
+            exit_node_ip: Some(String::new()),
+            exit_node_ip_set: Some(true),
+            ..Self::default()
+        }
     }
 
     pub fn allow_lan(on: bool) -> Self {

@@ -143,18 +143,16 @@ impl Watch {
                 }
                 continue;
             };
-            match body.frame().await {
-                Some(Ok(frame)) => {
-                    if let Some(data) = frame.data_ref() {
-                        self.buf.extend_from_slice(data);
-                        self.take_lines();
-                    }
-                    if self.buf.len() <= LINE_LIMIT {
-                        continue;
-                    }
+            if let Some(Ok(frame)) = body.frame().await {
+                if let Some(data) = frame.data_ref() {
+                    self.buf.extend_from_slice(data);
+                    self.take_lines();
                 }
-                Some(Err(_)) | None => {}
+                if self.buf.len() <= LINE_LIMIT {
+                    continue;
+                }
             }
+            // The stream ended or failed, or sent a line too long to be ours.
             self.body = None;
             self.buf.clear();
             return BusEvent::Down;
@@ -214,7 +212,8 @@ mod tests {
             buf.extend_from_slice(&chunk[..n]);
             let text = String::from_utf8_lossy(&buf).into_owned();
             if let Some((head, body)) = text.split_once("\r\n\r\n") {
-                let len = head.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                let len =
+                    head.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
                 if body.len() >= len {
                     return text;
                 }
