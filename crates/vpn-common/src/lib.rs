@@ -12,7 +12,9 @@ pub mod dbus {
     pub const BUS_NAME: &str = "io.github.dc.CosmicVpnHelper";
     pub const OBJECT_PATH: &str = "/io/github/dc/CosmicVpnHelper";
     pub const INTERFACE: &str = "io.github.dc.CosmicVpnHelper1";
-    pub const VERSION: u32 = 1;
+    /// 2 adds the browser tunnel (`ImportBrowser`, `BrowserUp`, `BrowserDown`,
+    /// `LaunchBrowser`, `GetBrowserStatus`, `BrowserChanged`).
+    pub const VERSION: u32 = 2;
     /// polkit actions.
     pub const ACTION_CONTROL: &str = "io.github.dc.cosmicvpn.control";
     pub const ACTION_IMPORT: &str = "io.github.dc.cosmicvpn.import";
@@ -29,7 +31,7 @@ pub mod names {
     pub const P2P_IF: &str = "wg-p2p";
     /// NetworkManager's interface for the web tunnel.
     pub const WEB_IF: &str = "wg-web";
-    /// Encrypted torrent packets carry this mark and bypass other VPNs.
+    /// Encrypted torrent and browser packets carry this mark and bypass other VPNs.
     pub const FWMARK: u32 = 0xca6c;
     pub const RULE_PRIORITY: u32 = 100;
     /// The transient unit qBittorrent runs in.
@@ -39,6 +41,13 @@ pub mod names {
     pub const WEB_V6_PLACEHOLDER: &str = "fd00:ca6c::3/128";
     /// Where the helper keeps the torrent conf (0600 root).
     pub const P2P_CONF: &str = "/etc/cosmic-vpn/p2p.conf";
+    /// The browser namespace: a second private space, with its own tunnel.
+    pub const BROWSER_NETNS_PATH: &str = "/run/netns/vpn-browser";
+    pub const BROWSER_IF: &str = "wg-browser";
+    /// The transient unit the browser is launched from.
+    pub const BROWSER_UNIT: &str = "cosmic-vpn-browser.service";
+    pub const BROWSER_V6_PLACEHOLDER: &str = "fd00:ca6c::4/128";
+    pub const BROWSER_CONF: &str = "/etc/cosmic-vpn/browser.conf";
 }
 
 /// Replaces the values of `PrivateKey`, `PresharedKey`, `password=` and

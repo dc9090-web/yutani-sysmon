@@ -2,7 +2,7 @@
 //! the applet steps through every state every 8 s.
 
 use vpn_common::conf::{self, ConfSummary};
-use vpn_common::status::{ListenApplied, PortState, QbitState, Status, TunnelState};
+use vpn_common::status::{BrowserState, BrowserStatus, ListenApplied, PortState, QbitState, Status, TunnelState};
 
 use crate::app::{Page, WebUiTest};
 use crate::config::IconStyle;
@@ -40,10 +40,12 @@ pub struct Scene {
     pub name: &'static str,
     pub p2p: Status,
     pub web: Web,
+    pub browser: BrowserStatus,
     pub leak: bool,
     pub helper: bool,
     pub p2p_conf: Option<ConfSummary>,
     pub web_conf: Option<ConfSummary>,
+    pub browser_conf: Option<ConfSummary>,
     pub icon_style: IconStyle,
     pub page: Page,
     pub test: Option<WebUiTest>,
@@ -51,7 +53,7 @@ pub struct Scene {
     pub p2p_wanted: bool,
 }
 
-pub const SCENES: usize = 13;
+pub const SCENES: usize = 15;
 
 pub fn scene(i: usize) -> Scene {
     let p2p_conf = summary(include_str!("../../vpn-common/tests/fixtures/conf/p2p_natpmp_on.conf"), "proton-nl-256-p2p.conf");
@@ -68,15 +70,27 @@ pub fn scene(i: usize) -> Scene {
         listen_port_applied: ListenApplied::Auto,
         ..Status::default()
     };
+    // Any non-P2P conf does for the browser.
+    let browser_conf = summary(include_str!("../../vpn-common/tests/fixtures/conf/moderate_nat_on.conf"), "proton-nl-12.conf");
+    let browser_on = BrowserStatus {
+        state: TunnelState::On,
+        handshake_age: 8,
+        rx_bps: 2_300_000,
+        tx_bps: 180_000,
+        browser: BrowserState::Running,
+        ..BrowserStatus::default()
+    };
     let web_on = Web { state: TunnelState::On, handshake_age: Some(31), rx_bps: 1_200_000, tx_bps: 240_000, ..Web::default() };
     let mut s = Scene {
         name: "both-on",
         p2p: on.clone(),
         web: web_on.clone(),
+        browser: BrowserStatus::default(),
         leak: false,
         helper: true,
         p2p_conf: Some(p2p_conf),
         web_conf: Some(web_conf),
+        browser_conf: Some(browser_conf),
         icon_style: IconStyle::Mono,
         page: Page::Main,
         test: None,
@@ -146,10 +160,22 @@ pub fn scene(i: usize) -> Scene {
             s.p2p = Status::default();
             s.web = Web::default();
         }
+        12 => {
+            s.name = "browser-on";
+            s.p2p = Status::default();
+            s.p2p_wanted = false;
+            s.web = Web::default();
+            s.browser = browser_on;
+        }
+        13 => {
+            s.name = "all-on";
+            s.browser = browser_on;
+        }
         _ => {
             s.name = "first-run";
             s.p2p_conf = None;
             s.web_conf = None;
+            s.browser_conf = None;
             s.p2p = Status::default();
             s.web = Web::default();
         }
@@ -162,7 +188,21 @@ mod tests {
     #[test]
     fn every_scene_builds() {
         let names: Vec<_> = (0..super::SCENES).map(|i| super::scene(i).name).collect();
-        for n in ["off", "connecting", "both-on", "leak", "stale", "no-port-forwarding", "web-failed", "helper-missing", "first-run", "settings", "neon"] {
+        for n in [
+            "off",
+            "connecting",
+            "both-on",
+            "leak",
+            "stale",
+            "no-port-forwarding",
+            "web-failed",
+            "helper-missing",
+            "first-run",
+            "settings",
+            "neon",
+            "browser-on",
+            "all-on",
+        ] {
             assert!(names.contains(&n), "{n}");
         }
     }

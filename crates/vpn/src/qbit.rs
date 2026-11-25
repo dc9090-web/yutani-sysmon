@@ -20,11 +20,11 @@ pub struct Command {
     pub display: String,
 }
 
-fn home() -> PathBuf {
+pub fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
 }
 
-fn on_path(name: &str) -> Option<PathBuf> {
+pub fn on_path(name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|p| std::env::split_paths(&p).map(|d| d.join(name)).find(|p| p.is_file()))
 }
 
@@ -130,7 +130,7 @@ fn wanted(k: &str) -> bool {
     ENV_KEYS.contains(&k) || k.starts_with("LC_")
 }
 
-/// The environment qBittorrent needs to show its window. Panel applets run
+/// The environment qBittorrent (or the browser) needs to show its window. Panel applets run
 /// on the panel's own Wayland connection, without the session's
 /// `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR` or session bus, so those come from
 /// the user's systemd manager (the session's environment). The helper keeps

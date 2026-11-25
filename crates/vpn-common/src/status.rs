@@ -39,6 +39,11 @@ str_enum!(
     ListenApplied { None = "none", Auto = "auto", Conf = "conf", Manual = "manual", Failed = "failed" }
 );
 
+str_enum!(
+    /// The isolated browser, as the helper sees it in its namespace.
+    BrowserState { Stopped = "stopped", Starting = "starting", Running = "running" }
+);
+
 impl TunnelState {
     /// `on` or `stale`: traffic can flow.
     pub fn up(self) -> bool {
@@ -98,6 +103,45 @@ impl Status {
             qbit: QbitState::parse(text("qbit")).unwrap_or_default(),
             listen_port_applied: ListenApplied::parse(text("listen_port_applied")).unwrap_or_default(),
             qbit_exit: d.get("qbit_exit").and_then(|v| i32::try_from(v).ok()).unwrap_or_default(),
+        }
+    }
+}
+
+/// The browser tunnel's status, as `BrowserChanged(a{sv})` carries it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BrowserStatus {
+    pub state: TunnelState,
+    /// Why the tunnel is in `error`, or why it was closed (with `state` off).
+    pub error: String,
+    pub handshake_age: u32,
+    pub rx_bps: u64,
+    pub tx_bps: u64,
+    pub browser: BrowserState,
+}
+
+impl BrowserStatus {
+    pub fn to_dict(&self) -> HashMap<String, OwnedValue> {
+        let s = |v: &str| OwnedValue::try_from(Value::from(v.to_owned())).expect("strings convert");
+        HashMap::from([
+            ("state".into(), s(self.state.as_str())),
+            ("error".into(), s(&self.error)),
+            ("handshake_age".into(), OwnedValue::from(self.handshake_age)),
+            ("rx_bps".into(), OwnedValue::from(self.rx_bps)),
+            ("tx_bps".into(), OwnedValue::from(self.tx_bps)),
+            ("browser".into(), s(self.browser.as_str())),
+        ])
+    }
+
+    /// Reads a dictionary; missing or mistyped fields keep their defaults.
+    pub fn from_dict(d: &HashMap<String, OwnedValue>) -> Self {
+        let text = |k: &str| d.get(k).and_then(|v| <&str>::try_from(v).ok()).unwrap_or_default();
+        Self {
+            state: TunnelState::parse(text("state")).unwrap_or_default(),
+            error: text("error").to_owned(),
+            handshake_age: d.get("handshake_age").and_then(|v| u32::try_from(v).ok()).unwrap_or_default(),
+            rx_bps: d.get("rx_bps").and_then(|v| u64::try_from(v).ok()).unwrap_or_default(),
+            tx_bps: d.get("tx_bps").and_then(|v| u64::try_from(v).ok()).unwrap_or_default(),
+            browser: BrowserState::parse(text("browser")).unwrap_or_default(),
         }
     }
 }
@@ -165,5 +209,9 @@ mod tests {
         assert_eq!(Status::from_dict(&HashMap::new()), Status::default());
         assert_eq!(TunnelState::parse("stale"), Some(TunnelState::Stale));
         assert!(TunnelState::Stale.up() && !TunnelState::Connecting.up());
+        let b =
+            BrowserStatus { state: TunnelState::On, error: String::new(), handshake_age: 7, rx_bps: 1_200_000, tx_bps: 90_000, browser: BrowserState::Running };
+        assert_eq!(BrowserStatus::from_dict(&b.to_dict()), b);
+        assert_eq!(BrowserStatus::from_dict(&HashMap::new()), BrowserStatus::default());
     }
 }

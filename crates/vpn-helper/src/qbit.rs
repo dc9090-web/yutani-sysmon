@@ -3,120 +3,28 @@
 //! UI from inside the namespace (§5.4).
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::time::Duration;
 
-use vpn_common::names::{NETNS_PATH, QBIT_UNIT};
-use zbus::zvariant::{OwnedObjectPath, Value};
+use vpn_common::names::QBIT_UNIT;
 use zeroize::Zeroizing;
 
-use crate::netns;
-
-const RESOLV: &str = "/etc/netns/vpn-p2p/resolv.conf";
-
-/// The only environment keys passed to qBittorrent (SPEC §5.2).
-const ENV_ALLOW: [&str; 12] = [
-    "WAYLAND_DISPLAY",
-    "DISPLAY",
-    "XAUTHORITY",
-    "XDG_RUNTIME_DIR",
-    "DBUS_SESSION_BUS_ADDRESS",
-    "HOME",
-    "LANG",
-    "XDG_CURRENT_DESKTOP",
-    "XDG_SESSION_TYPE",
-    "QT_QPA_PLATFORM",
-    "PATH",
-    "XDG_DATA_DIRS",
-];
-
-pub fn env_allowed(key: &str) -> bool {
-    ENV_ALLOW.contains(&key) || key.starts_with("LC_")
-}
-
-/// argv[0] must be an absolute path the caller owns, or a system or Flatpak path.
-pub fn argv0_allowed(path: &str, uid: u32, home: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let p = Path::new(path);
-    if !p.is_absolute() || path.contains("/../") {
-        return false;
-    }
-    let Ok(meta) = std::fs::metadata(p) else { return false };
-    if !meta.is_file() {
-        return false;
-    }
-    let trusted = ["/usr/", "/var/lib/flatpak/"].iter().any(|d| path.starts_with(d)) || p.starts_with(home.join(".local/share/flatpak"));
-    trusted || meta.uid() == uid
-}
-
-fn systemd(conn: &zbus::Connection) -> impl std::future::Future<Output = zbus::Result<zbus::Proxy<'static>>> + '_ {
-    zbus::Proxy::new(conn, "org.freedesktop.systemd1", "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager")
-}
+use crate::{netns, unit};
 
 /// Starts qBittorrent in the namespace as `uid`.
 pub async fn launch(conn: &zbus::Connection, argv: Vec<String>, env: HashMap<String, String>, uid: u32, gid: u32, home: String) -> zbus::Result<()> {
-    let env: Vec<String> = env.into_iter().filter(|(k, v)| env_allowed(k) && !v.contains('\n')).map(|(k, v)| format!("{k}={v}")).collect();
-    let mut binds = vec![(RESOLV.to_owned(), "/etc/resolv.conf".to_owned(), false, 0u64)];
-    // Flatpak apps read a copy of the host's resolv.conf kept by the session
-    // helper; point that at the tunnel's DNS too.
-    let flatpak_resolv = format!("/run/user/{uid}/.flatpak-helper/monitor/resolv.conf");
-    if Path::new(&flatpak_resolv).exists() {
-        binds.push((RESOLV.to_owned(), flatpak_resolv, true, 0));
-    }
-    let exec = vec![(argv[0].clone(), argv.clone(), false)];
-    let props: Vec<(&str, Value<'_>)> = vec![
-        ("Description", Value::from("qBittorrent inside the VPN namespace")),
-        ("Type", Value::from("exec")),
-        ("ExecStart", Value::from(exec)),
-        ("User", Value::from(uid.to_string())),
-        ("Group", Value::from(gid.to_string())),
-        ("WorkingDirectory", Value::from(home)),
-        ("Environment", Value::from(env)),
-        ("NetworkNamespacePath", Value::from(NETNS_PATH)),
-        ("BindReadOnlyPaths", Value::from(binds)),
-        // Host DNS daemons sit outside the tunnel: hide their sockets so
-        // glibc falls back to the bind-mounted resolv.conf.
-        ("InaccessiblePaths", Value::from(vec!["-/run/systemd/resolve", "-/run/nscd", "-/run/avahi-daemon"])),
-        ("CollectMode", Value::from("inactive-or-failed")),
-        // `flatpak run` exits once the app is up (the app moves to a scope of
-        // the user's systemd); without this, systemd would SIGTERM it then.
-        // The helper stops qBittorrent itself, by process (see `stop`).
-        ("KillMode", Value::from("process")),
-        ("TimeoutStopUSec", Value::from(10_000_000u64)),
-    ];
-    let aux: Vec<(&str, Vec<(&str, Value<'_>)>)> = Vec::new();
-    let _job: OwnedObjectPath = systemd(conn).await?.call("StartTransientUnit", &(QBIT_UNIT, "fail", props, aux)).await?;
-    Ok(())
+    unit::launch(conn, QBIT_UNIT, "qBittorrent inside the VPN namespace", &netns::P2P, argv, env, unit::User { uid, gid, home }).await
 }
 
 /// The unit's state: (`ActiveState`, main exit status).
 pub async fn unit_state(conn: &zbus::Connection) -> Option<(String, i32)> {
-    let path: OwnedObjectPath = systemd(conn).await.ok()?.call("GetUnit", &(QBIT_UNIT,)).await.ok()?;
-    let unit = zbus::Proxy::new(conn, "org.freedesktop.systemd1", path.clone(), "org.freedesktop.systemd1.Unit").await.ok()?;
-    let state: String = unit.get_property("ActiveState").await.ok()?;
-    let service = zbus::Proxy::new(conn, "org.freedesktop.systemd1", path, "org.freedesktop.systemd1.Service").await.ok()?;
-    let code: i32 = service.get_property("ExecMainStatus").await.unwrap_or(0);
-    Some((state, code))
+    unit::state(conn, QBIT_UNIT).await
 }
 
 /// qBittorrent processes inside the namespace. The unit only launches it:
 /// `flatpak run` moves the app into a scope of the user's own systemd, so
 /// the process, not the unit, is what counts.
 pub fn pids() -> Vec<i32> {
-    use std::os::unix::fs::MetadataExt;
-    let Ok(ns) = std::fs::metadata(NETNS_PATH).map(|m| (m.dev(), m.ino())) else { return Vec::new() };
-    let Ok(dir) = std::fs::read_dir("/proc") else { return Vec::new() };
-    dir.filter_map(Result::ok)
-        .filter_map(|e| {
-            let pid: i32 = e.file_name().to_str()?.parse().ok()?;
-            let comm = std::fs::read_to_string(e.path().join("comm")).ok()?;
-            if comm.trim() != "qbittorrent" {
-                return None;
-            }
-            let net = std::fs::metadata(e.path().join("ns/net")).ok()?;
-            ((net.dev(), net.ino()) == ns).then_some(pid)
-        })
-        .collect()
+    netns::pids(&netns::P2P).into_iter().filter(|p| std::fs::read_to_string(format!("/proc/{p}/comm")).is_ok_and(|c| c.trim() == "qbittorrent")).collect()
 }
 
 /// The unit is starting or running.
@@ -127,9 +35,7 @@ pub async fn unit_busy(conn: &zbus::Connection) -> bool {
 /// Asks qBittorrent to quit: stops the unit and sends SIGTERM to the
 /// processes in the namespace (qBittorrent shuts down cleanly on it).
 pub async fn stop(conn: &zbus::Connection) {
-    if let Ok(m) = systemd(conn).await {
-        let _: zbus::Result<OwnedObjectPath> = m.call("StopUnit", &(QBIT_UNIT, "replace")).await;
-    }
+    unit::stop(conn, QBIT_UNIT).await;
     signal(nix::sys::signal::Signal::SIGTERM);
 }
 
@@ -179,7 +85,7 @@ impl WebUi {
 /// sets the port; then checks the preferences. Runs inside the namespace,
 /// where qBittorrent's Web UI listens on 127.0.0.1.
 pub fn webui(webui_port: u16, user: Zeroizing<String>, pass: Zeroizing<String>, set_port: Option<u16>) -> WebUi {
-    let r = netns::in_netns_async(move || async move {
+    let r = netns::in_netns_async(&netns::P2P, move || async move {
         // No cookie store: qBittorrent marks its session cookie Secure, which a
         // store won't send over http://127.0.0.1. The cookie is carried by hand.
         let client = match reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(5)).build() {
@@ -248,16 +154,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn environment_allowlist() {
-        for k in ["WAYLAND_DISPLAY", "HOME", "LC_TIME", "PATH"] {
-            assert!(env_allowed(k), "{k}");
-        }
-        for k in ["LD_PRELOAD", "LD_LIBRARY_PATH", "SHELL", "QT_PLUGIN_PATH"] {
-            assert!(!env_allowed(k), "{k}");
-        }
-    }
-
-    #[test]
     fn cookies_carried_by_hand() {
         // qBittorrent 5 names it QBT_SID_<port> and marks it Secure.
         let h = ["QBT_SID_8080=abc123; HttpOnly; SameSite=Strict; Secure; path=/"];
@@ -265,17 +161,5 @@ mod tests {
         let two = ["SID=x; path=/", "other=y"];
         assert_eq!(session_cookie(two.into_iter()), "SID=x; other=y");
         assert_eq!(session_cookie(std::iter::empty()), "");
-    }
-
-    #[test]
-    fn argv0_rules() {
-        let home = Path::new("/home/nobody-here");
-        assert!(argv0_allowed("/usr/bin/env", 12345, home));
-        assert!(!argv0_allowed("usr/bin/env", 0, home));
-        assert!(!argv0_allowed("/usr/bin/../bin/env", 0, home));
-        assert!(!argv0_allowed("/usr/bin/does-not-exist", 0, home));
-        // A file outside the trusted paths, owned by someone else.
-        assert!(!argv0_allowed("/etc/hostname", 12345, home));
-        assert!(argv0_allowed("/etc/hostname", 0, home));
     }
 }

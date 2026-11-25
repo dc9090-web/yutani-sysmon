@@ -1,5 +1,6 @@
-//! The torrent namespace and its WireGuard interface (SPEC §4.1–4.2), over
-//! netlink only. The reference commands are in SPEC §4.1.
+//! The private namespaces and their WireGuard interfaces (SPEC §4.1–4.2),
+//! over netlink only. The reference commands are in SPEC §4.1. There are two
+//! [`Space`]s, built the same way: one for torrents, one for the browser.
 //!
 //! Anything that must run *inside* the namespace runs on a fresh thread
 //! that enters it and then exits, so no shared thread ever changes namespace.
@@ -17,12 +18,33 @@ use nix::mount::{MntFlags, MsFlags, mount, umount2};
 use nix::sched::{CloneFlags, setns, unshare};
 use rtnetlink::{IpVersion, LinkUnspec, RouteMessageBuilder};
 use vpn_common::conf::{Cidr, Conf};
-use vpn_common::names::{FWMARK, NETNS_PATH, P2P_IF, P2P_V6_PLACEHOLDER, RULE_PRIORITY};
+use vpn_common::names::{BROWSER_IF, BROWSER_NETNS_PATH, BROWSER_V6_PLACEHOLDER, FWMARK, NETNS_PATH, P2P_IF, P2P_V6_PLACEHOLDER, RULE_PRIORITY};
 use wireguard_uapi::linux::set::{AllowedIp, Device, Peer, WgDeviceF, WgPeerF};
 use wireguard_uapi::{DeviceInterface, RouteSocket, WgSocket};
 
 const NETNS_DIR: &str = "/run/netns";
-const RESOLV_DIR: &str = "/etc/netns/vpn-p2p";
+
+/// A namespace whose only way out is its own WireGuard interface.
+#[derive(Debug)]
+pub struct Space {
+    /// The bind-mounted namespace file under `/run/netns`.
+    pub path: &'static str,
+    pub ifname: &'static str,
+    /// Holds the `resolv.conf` bound over `/etc/resolv.conf` for apps inside.
+    pub resolv_dir: &'static str,
+    /// The address that makes IPv6 die in the tunnel when Proton gives none.
+    v6_placeholder: &'static str,
+}
+
+impl Space {
+    pub fn resolv(&self) -> String {
+        format!("{}/resolv.conf", self.resolv_dir)
+    }
+}
+
+pub static P2P: Space = Space { path: NETNS_PATH, ifname: P2P_IF, resolv_dir: "/etc/netns/vpn-p2p", v6_placeholder: P2P_V6_PLACEHOLDER };
+pub static BROWSER: Space =
+    Space { path: BROWSER_NETNS_PATH, ifname: BROWSER_IF, resolv_dir: "/etc/netns/vpn-browser", v6_placeholder: BROWSER_V6_PLACEHOLDER };
 /// The kernel's main routing table.
 const TABLE_MAIN: u32 = 254;
 const DEFAULT_MTU: u32 = 1420;
@@ -34,10 +56,10 @@ fn err(what: &str) -> impl Fn(io::Error) -> String + '_ {
     move |e| format!("{what}: {e}")
 }
 
-/// Runs `f` on a new thread inside the torrent namespace.
-pub fn in_netns<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T> {
+/// Runs `f` on a new thread inside the namespace.
+pub fn in_netns<T: Send + 'static>(sp: &'static Space, f: impl FnOnce() -> T + Send + 'static) -> Result<T> {
     std::thread::spawn(move || {
-        let ns = File::open(NETNS_PATH).map_err(err("opening the namespace"))?;
+        let ns = File::open(sp.path).map_err(err("opening the namespace"))?;
         setns(&ns, CloneFlags::CLONE_NEWNET).map_err(|e| format!("entering the namespace: {e}"))?;
         Ok(f())
     })
@@ -46,23 +68,23 @@ pub fn in_netns<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Re
 }
 
 /// Runs an async job inside the namespace, on its own small runtime.
-pub fn in_netns_async<T: Send + 'static, F: std::future::Future<Output = T>>(f: impl FnOnce() -> F + Send + 'static) -> Result<T> {
-    in_netns(move || {
+pub fn in_netns_async<T: Send + 'static, F: std::future::Future<Output = T>>(sp: &'static Space, f: impl FnOnce() -> F + Send + 'static) -> Result<T> {
+    in_netns(sp, move || {
         let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(err("starting a runtime"))?;
         Ok(rt.block_on(f()))
     })?
 }
 
 /// Whether the namespace exists and is mounted.
-pub fn exists() -> bool {
+pub fn exists(sp: &Space) -> bool {
     // A bind-mounted nsfs file has a different device from its directory.
-    let (Ok(f), Ok(d)) = (std::fs::metadata(NETNS_PATH), std::fs::metadata(NETNS_DIR)) else { return false };
+    let (Ok(f), Ok(d)) = (std::fs::metadata(sp.path), std::fs::metadata(NETNS_DIR)) else { return false };
     use std::os::unix::fs::MetadataExt;
     f.dev() != d.dev()
 }
 
-/// `ip netns add vpn-p2p`: a namespace pinned by a bind mount.
-fn create_netns() -> Result<()> {
+/// `ip netns add`: a namespace pinned by a bind mount.
+fn create_netns(sp: &'static Space) -> Result<()> {
     std::fs::create_dir_all(NETNS_DIR).map_err(err("creating /run/netns"))?;
     // Make /run/netns a shared mount point, as `ip netns` does, so the bind
     // mount is visible to every mount namespace (systemd, the applet).
@@ -71,25 +93,25 @@ fn create_netns() -> Result<()> {
         mount(Some(NETNS_DIR), NETNS_DIR, none, MsFlags::MS_BIND | MsFlags::MS_REC, none).map_err(|e| format!("binding /run/netns: {e}"))?;
         mount(none, NETNS_DIR, none, MsFlags::MS_SHARED | MsFlags::MS_REC, none).map_err(|e| format!("sharing /run/netns: {e}"))?;
     }
-    File::options().write(true).create_new(true).open(NETNS_PATH).map_err(err("creating the namespace file"))?;
-    std::thread::spawn(|| {
+    File::options().write(true).create_new(true).open(sp.path).map_err(err("creating the namespace file"))?;
+    std::thread::spawn(move || {
         unshare(CloneFlags::CLONE_NEWNET).map_err(|e| format!("unshare: {e}"))?;
         let none: Option<&str> = None;
-        mount(Some("/proc/thread-self/ns/net"), NETNS_PATH, none, MsFlags::MS_BIND, none).map_err(|e| format!("pinning the namespace: {e}"))
+        mount(Some("/proc/thread-self/ns/net"), sp.path, none, MsFlags::MS_BIND, none).map_err(|e| format!("pinning the namespace: {e}"))
     })
     .join()
     .map_err(|_| "the namespace thread panicked".to_owned())?
     .inspect_err(|_| {
-        let _ = std::fs::remove_file(NETNS_PATH);
+        let _ = std::fs::remove_file(sp.path);
     })
 }
 
-/// `ip netns del vpn-p2p`. Destroys `wg-p2p` and everything in it once no
-/// process is left inside.
-fn delete_netns() -> Result<()> {
-    if Path::new(NETNS_PATH).exists() {
-        let _ = umount2(NETNS_PATH, MntFlags::MNT_DETACH);
-        std::fs::remove_file(NETNS_PATH).map_err(err("removing the namespace file"))?;
+/// `ip netns del`. Destroys the tunnel and everything in the namespace once
+/// no process is left inside.
+fn delete_netns(sp: &Space) -> Result<()> {
+    if Path::new(sp.path).exists() {
+        let _ = umount2(sp.path, MntFlags::MNT_DETACH);
+        std::fs::remove_file(sp.path).map_err(err("removing the namespace file"))?;
     }
     Ok(())
 }
@@ -125,12 +147,12 @@ fn configure_wg(ifname: &str, conf: &Conf, endpoint: &SocketAddr) -> Result<()> 
 }
 
 /// Points the peer at `endpoint` again, forcing a fresh handshake. Runs inside the namespace.
-pub fn reset_endpoint(conf: &Conf, endpoint: SocketAddr) -> Result<()> {
+pub fn reset_endpoint(sp: &'static Space, conf: &Conf, endpoint: SocketAddr) -> Result<()> {
     let pk = conf.peer_public_key;
-    in_netns(move || {
+    in_netns(sp, move || {
         let peer = Peer::from_public_key(&pk).endpoint(&endpoint);
         let mut wg = WgSocket::connect().map_err(|e| format!("WireGuard netlink: {e}"))?;
-        wg.set_device(Device::from_ifname(P2P_IF).peers(vec![peer])).map_err(|e| format!("resetting the endpoint: {e}"))
+        wg.set_device(Device::from_ifname(sp.ifname).peers(vec![peer])).map_err(|e| format!("resetting the endpoint: {e}"))
     })?
 }
 
@@ -156,9 +178,9 @@ fn read_stats(ifname: &str) -> Result<WgStats> {
     Ok(stats)
 }
 
-/// `wg-p2p`'s counters (inside the namespace).
-pub fn p2p_stats() -> Result<WgStats> {
-    in_netns(|| read_stats(P2P_IF))?
+/// The tunnel's counters (inside its namespace).
+pub fn stats(sp: &'static Space) -> Result<WgStats> {
+    in_netns(sp, || read_stats(sp.ifname))?
 }
 
 /// The web tunnel's handshake age in seconds (host namespace); 0 if none.
@@ -227,8 +249,8 @@ async fn host_handle() -> Result<rtnetlink::Handle> {
     Ok(handle)
 }
 
-fn write_resolv(conf: &Conf) -> Result<()> {
-    std::fs::create_dir_all(RESOLV_DIR).map_err(err("creating /etc/netns/vpn-p2p"))?;
+fn write_resolv(sp: &Space, conf: &Conf) -> Result<()> {
+    std::fs::create_dir_all(sp.resolv_dir).map_err(err("creating the resolv.conf directory"))?;
     let mut text = String::new();
     for d in &conf.dns {
         text.push_str(&format!("nameserver {d}\n"));
@@ -236,48 +258,49 @@ fn write_resolv(conf: &Conf) -> Result<()> {
     if text.is_empty() {
         text.push_str("nameserver 10.2.0.1\n");
     }
-    let tmp = format!("{RESOLV_DIR}/.resolv.conf.tmp");
+    let tmp = format!("{}/.resolv.conf.tmp", sp.resolv_dir);
     std::fs::write(&tmp, text).map_err(err("writing resolv.conf"))?;
-    std::fs::rename(tmp, format!("{RESOLV_DIR}/resolv.conf")).map_err(err("writing resolv.conf"))
+    std::fs::rename(tmp, sp.resolv()).map_err(err("writing resolv.conf"))
 }
 
 /// Brings the tunnel up (SPEC §4.1). Idempotent: an existing namespace with
-/// `wg-p2p` inside is adopted, not rebuilt.
-pub async fn up(conf: &Conf) -> Result<()> {
-    if exists() && p2p_stats().is_ok() {
+/// its interface inside is adopted, not rebuilt.
+pub async fn up(sp: &'static Space, conf: &Conf) -> Result<()> {
+    let ifname = sp.ifname;
+    if exists(sp) && stats(sp).is_ok() {
         tracing::info!("adopting the existing namespace");
-        write_resolv(conf)?;
+        write_resolv(sp, conf)?;
         return add_rules(&host_handle().await?).await;
     }
     let endpoint = resolve(conf)?;
     let host = host_handle().await?;
-    if !exists() {
-        create_netns()?;
+    if !exists(sp) {
+        create_netns(sp)?;
     }
-    // A stale wg-p2p left in the host namespace by a crash mid-setup.
-    if let Some(i) = link_index(&host, P2P_IF).await? {
+    // A stale interface left in the host namespace by a crash mid-setup.
+    if let Some(i) = link_index(&host, ifname).await? {
         let _ = host.link().del(i).execute().await;
     }
     // Created in the HOST namespace, so its UDP socket stays here.
     {
         let mut rs = RouteSocket::connect().map_err(|e| format!("netlink: {e}"))?;
-        rs.add_device(P2P_IF).map_err(|e| format!("creating {P2P_IF}: {e}"))?;
+        rs.add_device(ifname).map_err(|e| format!("creating {ifname}: {e}"))?;
     }
     let setup = async {
-        configure_wg(P2P_IF, conf, &endpoint)?;
-        let index = link_index(&host, P2P_IF).await?.ok_or_else(|| format!("{P2P_IF} vanished"))?;
-        let ns = File::open(NETNS_PATH).map_err(err("opening the namespace"))?;
-        host.link().set(LinkUnspec::new_with_index(index).setns_by_fd(ns.as_raw_fd()).build()).execute().await.map_err(|e| format!("moving {P2P_IF}: {e}"))?;
+        configure_wg(ifname, conf, &endpoint)?;
+        let index = link_index(&host, ifname).await?.ok_or_else(|| format!("{ifname} vanished"))?;
+        let ns = File::open(sp.path).map_err(err("opening the namespace"))?;
+        host.link().set(LinkUnspec::new_with_index(index).setns_by_fd(ns.as_raw_fd()).build()).execute().await.map_err(|e| format!("moving {ifname}: {e}"))?;
         let addrs: Vec<Cidr> = conf.addresses.clone();
         let mtu = conf.mtu.map_or(DEFAULT_MTU, u32::from);
-        in_netns_async(move || inside_setup(addrs, mtu))??;
-        write_resolv(conf)?;
+        in_netns_async(sp, move || inside_setup(sp, addrs, mtu))??;
+        write_resolv(sp, conf)?;
         add_rules(&host).await
     };
     if let Err(e) = setup.await {
         // Never leave a half-built tunnel behind; the namespace itself stays
         // (it has no way out, so the kill switch holds).
-        if let Ok(Some(i)) = link_index(&host, P2P_IF).await {
+        if let Ok(Some(i)) = link_index(&host, ifname).await {
             let _ = host.link().del(i).execute().await;
         }
         return Err(e);
@@ -285,13 +308,14 @@ pub async fn up(conf: &Conf) -> Result<()> {
     Ok(())
 }
 
-/// Inside the namespace: `lo` up, addresses, MTU, `wg-p2p` up, default routes.
-async fn inside_setup(addrs: Vec<Cidr>, mtu: u32) -> Result<()> {
+/// Inside the namespace: `lo` up, addresses, MTU, the tunnel up, default routes.
+async fn inside_setup(sp: &'static Space, addrs: Vec<Cidr>, mtu: u32) -> Result<()> {
+    let ifname = sp.ifname;
     let (conn, h, _) = rtnetlink::new_connection().map_err(err("netlink in the namespace"))?;
     tokio::spawn(conn);
     let lo = link_index(&h, "lo").await?.ok_or("no lo in the namespace")?;
     h.link().set(LinkUnspec::new_with_index(lo).up().build()).execute().await.map_err(|e| format!("lo up: {e}"))?;
-    let wg = link_index(&h, P2P_IF).await?.ok_or_else(|| format!("{P2P_IF} isn't in the namespace"))?;
+    let wg = link_index(&h, ifname).await?.ok_or_else(|| format!("{ifname} isn't in the namespace"))?;
     let mut has_v6 = false;
     for a in &addrs {
         has_v6 |= a.addr.is_ipv6();
@@ -299,10 +323,10 @@ async fn inside_setup(addrs: Vec<Cidr>, mtu: u32) -> Result<()> {
     }
     if !has_v6 {
         // No IPv6 from Proton: v6 still routes into the tunnel and dies there.
-        let p = Cidr::parse(P2P_V6_PLACEHOLDER).expect("valid placeholder");
+        let p = Cidr::parse(sp.v6_placeholder).expect("valid placeholder");
         h.address().add(wg, p.addr, p.prefix).execute().await.map_err(|e| format!("adding {p}: {e}"))?;
     }
-    h.link().set(LinkUnspec::new_with_index(wg).mtu(mtu).up().build()).execute().await.map_err(|e| format!("{P2P_IF} up: {e}"))?;
+    h.link().set(LinkUnspec::new_with_index(wg).mtu(mtu).up().build()).execute().await.map_err(|e| format!("{ifname} up: {e}"))?;
     let v4 = RouteMessageBuilder::<Ipv4Addr>::new().destination_prefix(Ipv4Addr::UNSPECIFIED, 0).output_interface(wg).build();
     h.route().add(v4).execute().await.map_err(|e| format!("IPv4 default route: {e}"))?;
     let v6 = RouteMessageBuilder::<Ipv6Addr>::new().destination_prefix(Ipv6Addr::UNSPECIFIED, 0).output_interface(wg).build();
@@ -310,9 +334,27 @@ async fn inside_setup(addrs: Vec<Cidr>, mtu: u32) -> Result<()> {
     Ok(())
 }
 
-/// Tears the tunnel down (SPEC §4.2 steps 3–4).
-pub async fn down() -> Result<()> {
-    delete_netns()?;
-    let _ = std::fs::remove_dir_all(RESOLV_DIR);
+/// Tears the tunnel down (SPEC §4.2 steps 3–4). The fwmark rules are shared
+/// by both spaces, so they go only with the last one.
+pub async fn down(sp: &Space) -> Result<()> {
+    delete_netns(sp)?;
+    let _ = std::fs::remove_dir_all(sp.resolv_dir);
+    if exists(&P2P) || exists(&BROWSER) {
+        return Ok(());
+    }
     del_rules(&host_handle().await?).await
+}
+
+/// Every process inside the namespace.
+pub fn pids(sp: &Space) -> Vec<i32> {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(ns) = std::fs::metadata(sp.path).map(|m| (m.dev(), m.ino())) else { return Vec::new() };
+    let Ok(dir) = std::fs::read_dir("/proc") else { return Vec::new() };
+    dir.filter_map(std::result::Result::ok)
+        .filter_map(|e| {
+            let pid: i32 = e.file_name().to_str()?.parse().ok()?;
+            let net = std::fs::metadata(e.path().join("ns/net")).ok()?;
+            ((net.dev(), net.ino()) == ns).then_some(pid)
+        })
+        .collect()
 }

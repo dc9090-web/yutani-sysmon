@@ -1,13 +1,13 @@
 # /usr/lib/systemd/system/
 [Unit]
-Description=COSMIC VPN applet helper (WireGuard netns, NAT-PMP, qBittorrent launcher)
+Description=COSMIC VPN applet helper (WireGuard netns, NAT-PMP, qBittorrent and browser launcher)
 After=network.target
 
 [Service]
 Type=dbus
 BusName=io.github.dc.CosmicVpnHelper
 ExecStart=/usr/lib/cosmic-vpn-helper/cosmic-vpn-helper
-# The namespace and kill switch survive helper exit by design; the helper adopts them on restart.
+# The namespaces and kill switch survive helper exit by design; the helper adopts them on restart.
 KillMode=process
 Restart=on-failure
 # No private mount namespace (ProtectSystem, PrivateTmp, ProtectHome …): the
@@ -16,9 +16,9 @@ Restart=on-failure
 # `ip netns add` does it. The limits below need no mount namespace.
 NoNewPrivileges=true
 # setns/unshare/mount need CAP_SYS_ADMIN; reading the user's runtime dir for
-# the Flatpak DNS path needs CAP_DAC_READ_SEARCH. Finding qBittorrent by its
-# namespace (/proc/<pid>/ns/net of the user's processes) needs CAP_SYS_PTRACE,
-# and asking it to quit needs CAP_KILL.
+# the Flatpak DNS path needs CAP_DAC_READ_SEARCH. Finding qBittorrent and the
+# browser by their namespace (/proc/<pid>/ns/net of the user's processes)
+# needs CAP_SYS_PTRACE, and asking them to quit needs CAP_KILL.
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_DAC_READ_SEARCH CAP_SYS_PTRACE CAP_KILL
 RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 LockPersonality=true

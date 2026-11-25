@@ -67,12 +67,20 @@ Ideas and known limits kept out of v1 (the handoffs say: don't add features that
 - **VPN Web UI session cookie:** qBittorrent 5 names it `QBT_SID_<port>` and marks it `Secure`, which an HTTP cookie store won't send over `http://127.0.0.1`. The helper carries the cookie by hand.
 - **VPN Web UI bypass first:** the helper asks for the preferences without logging in first; with "Bypass authentication for clients on localhost" that succeeds and no login is tried, so a stale saved password can't count toward qBittorrent's failed-login ban. An empty username in the applet also means "use the bypass".
 
+- **VPN browser tunnel** (DC's request, 2026-11-25): a third switch, "Browser · Firefox", between Torrents and All web traffic. The helper's namespace code now takes a `Space` (`vpn-p2p` / `vpn-browser`), so both private spaces are built by the same code; they share the `0xca6c` mark and its rule, removed with the last one. The helper's D-Bus `Version` is 2 (`ImportBrowser`, `BrowserUp`, `BrowserDown`, `LaunchBrowser`, `GetBrowserStatus`, `BrowserChanged`); a newer applet with the old helper shows "Update the system helper".
+- **VPN browser = its own Firefox instance.** A Firefox started the usual way hands over to the one already running (outside the tunnel), so the applet starts it with `--no-remote --profile ~/.local/share/cosmic-vpn/firefox-profile`. The profile is kept between sessions (DC didn't ask for it to be wiped).
+- **VPN browser lifetime:** the tunnel lives exactly as long as the browser. The applet launches Firefox only once the tunnel reports a handshake; the helper takes the namespace down 3 s after the last process in it exits (a Firefox self-restart hands over within that), or 20 s after a launch that never appears. Everything in `vpn-browser` is the browser, so it's tracked and stopped by namespace, not by process name; quitting sends SIGTERM to the top processes only. It's never restored at login, since that would open a browser.
+- **VPN browser in the panel:** a `FOX` chunk only while its tunnel isn't off (no "show when off" setting), and a bar on the bottom edge of the reticle's frame, added to the embedded SVG at draw time rather than as four more icon files. The card uses `window-new-symbolic`: Firefox's own symbolic icon is drawn with `context-fill`, which the icon renderer leaves invisible.
+- **VPN header captions:** "Both tunnels on" became "Torrent and web tunnels on" now that there are three, and a stale web or browser tunnel says "A tunnel is reconnecting" instead of blaming the torrent one.
+
 ## Ideas
 
 - Bits/s option for Network Traffic (open decision in the handoff).
 - Ship the RAPL udev rule in distro packages, or keep it a README step (open decision).
 - Final App IDs and crate names (placeholders today).
 - Weather: confirm the One Call 4.0 fixtures against live calls once a key with the subscription is available (`just live-check`).
+- VPN browser: the Flatpak Firefox path (profile under `~/.var/app/org.mozilla.firefox/`) is written but unchecked; only the native package was run.
+- VPN browser: an option to wipe the profile when the browser closes.
 - VPN: not yet checked live: restore at login (needs a logout), suspend/resume, replacing a config, toggling the web tunnel from COSMIC Settings, panel sizes S–XL and vertical, the light theme, 125 % text scale.
 - Weather: ACCEPTANCE D-09 expects 5 distinct regions for "Melbourne"; the live API returns two "Victoria, AU" results with different coordinates.
 - AI Usage: localise weekday/month names in clock-time resets.

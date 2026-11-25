@@ -37,6 +37,10 @@ pub struct Config {
     pub p2p_conf: Option<ConfSummary>,
     pub web_conf: Option<ConfSummary>,
     pub web_nm_uuid: Option<String>,
+    /// The isolated browser's tunnel.
+    pub browser_conf: Option<ConfSummary>,
+    /// Overrides the detected browser command.
+    pub browser_command: Option<String>,
     pub launch_qbit: bool,
     pub quit_qbit: bool,
     pub auto_port: bool,
@@ -62,6 +66,8 @@ impl Default for Config {
             p2p_conf: None,
             web_conf: None,
             web_nm_uuid: None,
+            browser_conf: None,
+            browser_command: None,
             launch_qbit: true,
             quit_qbit: true,
             auto_port: true,
@@ -81,12 +87,15 @@ impl Default for Config {
 
 impl Config {
     /// A Web UI port of 0 becomes 8080; a blank command override is none.
+    /// The browser tunnel is never restored at login: it would open a browser.
     pub fn enforce(mut self) -> Self {
         if self.webui_port == 0 {
             self.webui_port = 8080;
         }
-        if self.qbit_command.as_ref().is_some_and(|c| c.trim().is_empty()) {
-            self.qbit_command = None;
+        for c in [&mut self.qbit_command, &mut self.browser_command] {
+            if c.as_ref().is_some_and(|c| c.trim().is_empty()) {
+                *c = None;
+            }
         }
         self
     }
@@ -121,8 +130,8 @@ mod tests {
         assert!(!d.last_p2p && !d.last_web);
         assert_eq!((d.webui_port, d.webui_user.as_str(), d.icon_style), (8080, "admin", IconStyle::Mono));
         assert_eq!(d.clone().enforce(), d);
-        let odd = Config { webui_port: 0, qbit_command: Some("  ".into()), ..Config::default() }.enforce();
-        assert_eq!((odd.webui_port, odd.qbit_command), (8080, None));
+        let odd = Config { webui_port: 0, qbit_command: Some("  ".into()), browser_command: Some(String::new()), ..Config::default() }.enforce();
+        assert_eq!((odd.webui_port, odd.qbit_command, odd.browser_command), (8080, None, None));
     }
 
     #[test]

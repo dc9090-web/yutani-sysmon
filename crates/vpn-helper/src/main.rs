@@ -1,11 +1,14 @@
 //! `cosmic-vpn-helper`: the COSMIC VPN applet's root helper. D-Bus activated
 //! on the system bus, polkit-guarded; it owns the `vpn-p2p` namespace, the
-//! `wg-p2p` tunnel, NAT-PMP and the qBittorrent unit (SPEC §2, §4, §5).
+//! `wg-p2p` tunnel, NAT-PMP and the qBittorrent unit (SPEC §2, §4, §5), and
+//! the `vpn-browser` namespace with its own tunnel and the browser in it.
 
+mod browser;
 mod netns;
 mod portmap;
 mod qbit;
 mod service;
+mod unit;
 
 use vpn_common::dbus::{BUS_NAME, OBJECT_PATH};
 

@@ -77,7 +77,7 @@ package_yutani-weather() {
 }
 
 package_yutani-vpn() {
-  pkgdesc='Yutani VPN: ProtonVPN WireGuard with a torrent-only tunnel and a web tunnel (COSMIC applet and root helper)'
+  pkgdesc='Yutani VPN: ProtonVPN WireGuard with a torrent-only tunnel, a Firefox-only tunnel and a web tunnel (COSMIC applet and root helper)'
   depends+=(polkit networkmanager)
   optdepends=('qbittorrent: the torrent tunnel launches it')
   install=yutani-vpn.install

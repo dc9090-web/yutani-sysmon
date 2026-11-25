@@ -41,7 +41,7 @@ fn ask(sock: &UdpSocket, proto: Proto) -> Option<Mapping> {
 
 /// One round, run on a thread inside the namespace.
 pub fn round() -> Round {
-    let result = netns::in_netns(|| {
+    let result = netns::in_netns(&netns::P2P, || {
         let Ok(sock) = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)) else { return Round::NoResponse };
         let Some(udp) = ask(&sock, Proto::Udp) else { return Round::NoResponse };
         if !udp.ok() {

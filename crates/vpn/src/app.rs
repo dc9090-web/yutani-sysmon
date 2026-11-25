@@ -22,8 +22,9 @@ use common::panel::{Panel, Type};
 use common::ui::{self, cell, mono, space_m, space_s, space_xs, space_xxs, space_xxxs};
 
 use vpn_common::conf::{self, ConfSummary, Hint};
-use vpn_common::status::{ListenApplied, PortState, QbitState, Status, TunnelState};
+use vpn_common::status::{BrowserState, BrowserStatus, ListenApplied, PortState, QbitState, Status, TunnelState};
 
+use crate::browser;
 use crate::config::{APP_ID, Config, IconStyle};
 use crate::fl;
 use crate::helper::{self, CallError};
@@ -53,6 +54,7 @@ pub enum Page {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tunnel {
     P2p,
+    Browser,
     Web,
 }
 
@@ -73,6 +75,7 @@ pub enum Field {
     User,
     Pass,
     Command,
+    BrowserCommand,
 }
 
 /// The Web UI test's last result.
@@ -100,7 +103,7 @@ pub enum Message {
     Surface(cosmic::surface::Action<Message>),
     TogglePopup(Rectangle, cosmic::iced::Vector),
     PopupClosed(Id),
-    Config(Config),
+    Config(Box<Config>),
     Page(Page),
     Escape,
     Tick,
@@ -110,6 +113,10 @@ pub enum Message {
     /// A later check for the helper (it may have been installed since start).
     HelperFound(bool),
     HelperStatus(Status),
+    /// The browser tunnel as the helper has it at start (to adopt it).
+    BrowserStatus(BrowserStatus),
+    LaunchBrowser,
+    BrowserLaunched(Result<(), CallError>),
     Web(WebState),
     WebHandshake(Option<u32>),
     Switch(Tunnel, bool),
@@ -155,6 +162,13 @@ pub struct App {
     /// The torrent tunnel, as the helper last reported it.
     p2p: Status,
     web: Web,
+    /// The browser tunnel, as the helper last reported it.
+    browser: BrowserStatus,
+    /// The browser switch is wanted on.
+    browser_wanted: bool,
+    /// The browser was launched for this turn of the switch.
+    browser_launched: bool,
+    browser_cmd: Option<browser::Command>,
     /// Waiting for a terminal state after a switch, since this instant.
     busy: HashMap<Tunnel, Instant>,
     /// The torrent switch is wanted on, for launching and errors.
@@ -203,6 +217,15 @@ impl App {
             s.qbit = QbitState::Outside;
         }
         if self.busy.contains_key(&Tunnel::P2p) && s.state == TunnelState::Off && self.p2p_wanted {
+            s.state = TunnelState::Connecting;
+        }
+        s
+    }
+
+    /// The browser status as shown, with an optimistic `connecting`.
+    fn browser_view(&self) -> BrowserStatus {
+        let mut s = self.browser.clone();
+        if self.busy.contains_key(&Tunnel::Browser) && s.state == TunnelState::Off && self.browser_wanted {
             s.state = TunnelState::Connecting;
         }
         s
@@ -347,6 +370,64 @@ impl App {
         Task::batch(tasks)
     }
 
+    // ---- browser tunnel ---------------------------------------------------------------
+
+    fn browser_on(&mut self) -> Task<Message> {
+        let Some(bus) = self.bus() else { return Task::none() };
+        self.browser_wanted = true;
+        self.browser_launched = false;
+        self.busy.insert(Tunnel::Browser, Instant::now());
+        cosmic::task::future(async move { Message::Called(Tunnel::Browser, helper::browser_up(bus).await) })
+    }
+
+    /// Quits the browser and takes its tunnel down.
+    fn browser_off(&mut self) -> Task<Message> {
+        let Some(bus) = self.bus() else { return Task::none() };
+        self.browser_wanted = false;
+        self.busy.insert(Tunnel::Browser, Instant::now());
+        cosmic::task::future(async move { Message::Called(Tunnel::Browser, helper::browser_down(bus).await) })
+    }
+
+    /// Starts the browser in its namespace, as its own instance and profile.
+    fn launch_browser(&mut self) -> Task<Message> {
+        let (Some(bus), Some(cmd)) = (self.bus(), self.browser_cmd.clone()) else { return Task::none() };
+        if self.browser.browser != BrowserState::Stopped {
+            return Task::none();
+        }
+        self.browser_launched = true;
+        if let Err(e) = browser::prepare(&cmd.profile) {
+            tracing::warn!("creating the browser profile: {e}");
+            return self.toast(fl!("toast-error", why = e.to_string()));
+        }
+        tracing::debug!(argv = ?cmd.argv, "launching the browser");
+        let env = qbit::environment();
+        cosmic::task::future(async move { Message::BrowserLaunched(helper::launch_browser(bus, cmd.argv, env).await) })
+    }
+
+    /// A new browser status from the helper.
+    fn on_browser(&mut self, s: BrowserStatus) -> Task<Message> {
+        let prev = std::mem::replace(&mut self.browser, s);
+        let b = &self.browser;
+        if matches!(b.state, TunnelState::On | TunnelState::Error | TunnelState::Stale) || (b.state == TunnelState::Off && !self.browser_wanted) {
+            self.busy.remove(&Tunnel::Browser);
+        }
+        if b.state == TunnelState::Off && prev.state != TunnelState::Off {
+            // The helper took it down: the browser was closed, or never started.
+            self.browser_wanted = false;
+            self.browser_launched = false;
+            self.busy.remove(&Tunnel::Browser);
+            if !b.error.is_empty() {
+                return self.toast(fl!("toast-error", why = b.error.clone()));
+            }
+            return Task::none();
+        }
+        // The browser opens once the tunnel has a handshake, never before.
+        if self.browser_wanted && !self.browser_launched && b.state == TunnelState::On && b.browser == BrowserState::Stopped {
+            return self.launch_browser();
+        }
+        Task::none()
+    }
+
     // ---- web tunnel -------------------------------------------------------------------
 
     fn web_switch(&mut self, on: bool) -> Task<Message> {
@@ -440,17 +521,10 @@ impl App {
         let Some(bus) = self.bus() else { return Task::none() };
         self.importing = Some(t);
         match t {
-            Tunnel::P2p => cosmic::task::future(async move {
-                Message::Imported(
-                    Tunnel::P2p,
-                    helper::import_p2p(bus, text, name).await.map_err(|e| match e {
-                        CallError::Denied => fl!("toast-denied"),
-                        CallError::Missing => fl!("banner-helper-title"),
-                        CallError::Other(m) => m,
-                        CallError::QbitRunning => String::new(),
-                    }),
-                )
-            }),
+            Tunnel::P2p => cosmic::task::future(async move { Message::Imported(Tunnel::P2p, helper::import_p2p(bus, text, name).await.map_err(import_error)) }),
+            Tunnel::Browser => {
+                cosmic::task::future(async move { Message::Imported(Tunnel::Browser, helper::import_browser(bus, text, name).await.map_err(import_error)) })
+            }
             Tunnel::Web => {
                 let old = self.config.web_nm_uuid.clone();
                 let label = summary.server_label.clone();
@@ -481,6 +555,11 @@ impl App {
         if model::show_chunk(p.state, self.config.show_p2p_off) {
             v.push(mk(fl!("panel-p2p"), p.state));
         }
+        // The browser's chunk is only there while its tunnel isn't off.
+        let b = self.browser_view();
+        if model::show_chunk(b.state, false) {
+            v.push(mk(fl!("panel-browser"), b.state));
+        }
         if model::show_chunk(w.state, self.config.show_web_off) {
             v.push(mk(fl!("panel-web"), w.state));
         }
@@ -504,6 +583,10 @@ impl App {
             p2p.push_str(&fl!("panel-tooltip-port", port = port));
         }
         let mut text = fl!("panel-tooltip", p2p = p2p, web = word(w.state));
+        let b = self.browser_view();
+        if b.state != TunnelState::Off {
+            text.push_str(&fl!("panel-tooltip-browser", browser = word(b.state)));
+        }
         if p.qbit == QbitState::Outside {
             text.push(' ');
             text.push_str(&fl!("panel-tooltip-leak"));
@@ -519,7 +602,8 @@ impl App {
         let thickness = size + 2.0 * f32::from(minor);
         let pv = self.p2p_view();
         let wv = self.web_view();
-        let icon = reticle(Reticle::of(pv.state, wv.state), model::issue(&pv, &wv), self.config.icon_style, size);
+        let bv = self.browser_view();
+        let icon = reticle(Reticle::of(pv.state, wv.state), bv.state.up(), model::issue(&pv, &wv, &bv), self.config.icon_style, size);
         let content = panel::content(icon, self.chunks(), &p);
         let (pad, w, h) =
             if p.horizontal { ([0, major], Length::Shrink, Length::Fixed(thickness)) } else { ([major, 0], Length::Fixed(thickness), Length::Shrink) };
@@ -548,9 +632,10 @@ impl App {
     fn header(&self) -> Element<'_, Message> {
         let pv = self.p2p_view();
         let wv = self.web_view();
-        let (key, tone) = model::header(&pv, &wv);
+        let bv = self.browser_view();
+        let (key, tone) = model::header(&pv, &wv, &bv);
         let ink = tone.map_or(Ink::Muted, tone_ink);
-        let icon = reticle(Reticle::of(pv.state, wv.state), None, IconStyle::Mono, 24.0);
+        let icon = reticle(Reticle::of(pv.state, wv.state), bv.state.up(), None, IconStyle::Mono, 24.0);
         widget::container(
             Row::new()
                 .spacing(space_s())
@@ -568,7 +653,7 @@ impl App {
         if pv.qbit == QbitState::Outside {
             col = col.push(self.leak_banner());
         }
-        let no_configs = self.config.p2p_conf.is_none() && self.config.web_conf.is_none();
+        let no_configs = self.config.p2p_conf.is_none() && self.config.web_conf.is_none() && self.config.browser_conf.is_none();
         if no_configs {
             return col
                 .push(banner(fl!("banner-import-title"), fl!("banner-import-body"), Some((fl!("banner-import-btn"), Message::Page(Page::Settings)))))
@@ -581,7 +666,7 @@ impl App {
         }
         col = col.push(widget::divider::horizontal::default());
         if self.helper_ok != Some(false) {
-            col = col.push(self.p2p_card()).push(ui::inset_divider());
+            col = col.push(self.p2p_card()).push(ui::inset_divider()).push(self.browser_card()).push(ui::inset_divider());
         }
         col.push(self.web_card()).push(ui::inset_divider()).push(ui::settings_row(fl!("settings"), Message::Page(Page::Settings))).into()
     }
@@ -606,10 +691,13 @@ impl App {
     fn card_head(&self, t: Tunnel, state: TunnelState, summary: Option<&ConfSummary>) -> Element<'_, Message> {
         let (icon, title, caption) = match t {
             Tunnel::P2p => ("folder-download-symbolic", fl!("card-p2p-title"), summary.map(|s| fl!("card-p2p-caption", server = s.server_label.clone()))),
+            Tunnel::Browser => (BROWSER_ICON, fl!("card-browser-title"), summary.map(|s| fl!("card-browser-caption", server = s.server_label.clone()))),
             Tunnel::Web => ("web-browser-symbolic", fl!("card-web-title"), summary.map(|s| fl!("card-web-caption", server = s.server_label.clone()))),
         };
         let configured = match t {
             Tunnel::P2p => self.config.p2p_conf.is_some(),
+            // Without a browser there's nothing to turn on (turning off still works).
+            Tunnel::Browser => self.config.browser_conf.is_some() && (self.browser_cmd.is_some() || state != TunnelState::Off),
             Tunnel::Web => self.config.web_nm_uuid.is_some(),
         };
         let busy = self.busy.contains_key(&t) || state == TunnelState::Connecting;
@@ -776,6 +864,71 @@ impl App {
         if dim { widget::container(b).class(theme::Container::custom(|_| widget::container::Style::default())).into() } else { b }
     }
 
+    fn browser_card(&self) -> Element<'_, Message> {
+        let s = self.browser_view();
+        let summary = self.config.browser_conf.as_ref();
+        let server = summary.map_or_else(String::new, |c| c.server_label.clone());
+        let mut col = Column::new().spacing(space_xs()).push(self.card_head(Tunnel::Browser, s.state, summary)).push(self.status_row(
+            s.state,
+            &s.error,
+            Some(s.handshake_age).filter(|a| *a > 0),
+            &server,
+            Some((s.rx_bps, s.tx_bps)),
+        ));
+        if s.state.up() {
+            let app: Element<'_, Message> = match s.browser {
+                BrowserState::Running => Row::new()
+                    .spacing(space_xs())
+                    .align_y(Alignment::Center)
+                    .push(ui::dot(Ink::Success))
+                    .push(widget::text::body(fl!("browser-running")))
+                    .into(),
+                BrowserState::Starting => widget::text::caption(fl!("browser-starting")).class(Ink::Muted.text()).into(),
+                // Only seen when a launch failed: the helper closes the tunnel with the browser.
+                BrowserState::Stopped => Row::new()
+                    .spacing(space_xs())
+                    .align_y(Alignment::Center)
+                    .push(widget::text::caption(fl!("browser-stopped")).class(Ink::Muted.text()).width(Length::Fill))
+                    .push(
+                        widget::button::custom(
+                            Row::new()
+                                .spacing(space_xxxs())
+                                .align_y(Alignment::Center)
+                                .push(widget::icon::from_name("media-playback-start-symbolic").size(10).symbolic(true))
+                                .push(widget::text::caption(fl!("browser-open"))),
+                        )
+                        .class(theme::Button::Standard)
+                        .padding([2, 12])
+                        .on_press_maybe((!self.demo() && self.browser_cmd.is_some()).then_some(Message::LaunchBrowser)),
+                    )
+                    .into(),
+            };
+            let row = Row::new()
+                .spacing(space_xs())
+                .align_y(Alignment::Center)
+                .height(Length::Fixed(28.0))
+                .push(cell(widget::text::caption(fl!("row-browser")).class(Ink::Muted.text()), KEY_W, Horizontal::Left))
+                .push(app);
+            col = col.push(boxed(row.into()));
+        }
+        let (ink, text) = if summary.is_some() && self.browser_cmd.is_none() {
+            (Ink::Warning, fl!("browser-missing"))
+        } else if s.state.up() {
+            (Ink::Success, fl!("note-browser-on"))
+        } else if s.state != TunnelState::Off {
+            (Ink::Success, fl!("note-browser-armed"))
+        } else {
+            (Ink::Muted, fl!("note-browser-off"))
+        };
+        col = col.push(
+            Row::new()
+                .spacing(space_xs())
+                .push(widget::icon::from_name("connection-secure-symbolic").size(12).symbolic(true).icon().class(ink.svg()))
+                .push(widget::text::caption(text).class(Ink::Muted.text()).width(Length::Fill)),
+        );
+        widget::container(col).padding([space_xs(), space_m()]).width(Length::Fill).into()
+    }
+
     fn web_card(&self) -> Element<'_, Message> {
         let w = self.web_view();
         let summary = self.config.web_conf.as_ref().filter(|_| self.config.web_nm_uuid.is_some());
@@ -790,12 +943,18 @@ impl App {
         if w.state == TunnelState::Off && w.other_vpn && self.config.last_web {
             col = col.push(widget::text::caption(fl!("web-other-vpn")).class(Ink::Warning.text()));
         }
-        if w.state != TunnelState::Off && self.p2p_view().state != TunnelState::Off {
+        let (p2p, browser) = (self.p2p_view().state != TunnelState::Off, self.browser_view().state != TunnelState::Off);
+        if w.state != TunnelState::Off && (p2p || browser) {
+            let text = match (p2p, browser) {
+                (true, true) => fl!("note-both-browser"),
+                (true, false) => fl!("note-both"),
+                _ => fl!("note-web-browser"),
+            };
             col = col.push(
                 Row::new()
                     .spacing(space_xs())
                     .push(widget::icon::from_name("connection-secure-symbolic").size(12).symbolic(true).icon().class(Ink::Muted.svg()))
-                    .push(widget::text::caption(fl!("note-both")).class(Ink::Muted.text())),
+                    .push(widget::text::caption(text).class(Ink::Muted.text()).width(Length::Fill)),
             );
         }
         widget::container(col).padding([space_xs(), space_m()]).width(Length::Fill).into()
@@ -810,6 +969,12 @@ impl App {
                 fl!("card-p2p-title").split(" · ").next().unwrap_or_default().to_owned(),
                 self.config.p2p_conf.as_ref(),
                 self.p2p.state != TunnelState::Off,
+            ),
+            Tunnel::Browser => (
+                BROWSER_ICON,
+                fl!("card-browser-title").split(" · ").next().unwrap_or_default().to_owned(),
+                self.config.browser_conf.as_ref(),
+                self.browser.state != TunnelState::Off,
             ),
             Tunnel::Web => (
                 "web-browser-symbolic",
@@ -848,6 +1013,9 @@ impl App {
                             (None, Hint::Unknown) => chip(fl!("flag-natpmp-unknown"), None),
                         });
                         chips = chips.push(chip(fl!("flag-p2p"), None)).push(chip(fl!("flag-killswitch"), None));
+                    }
+                    Tunnel::Browser => {
+                        chips = chips.push(chip(fl!("flag-killswitch"), None)).push(chip(format!("Proton {}", c.server_label), None));
                     }
                     Tunnel::Web => {
                         chips = chips.push(chip(fl!("flag-in-nm"), Some(Ink::Success))).push(chip(format!("Proton {}", c.server_label), None));
@@ -900,6 +1068,7 @@ impl App {
         let mut col = Column::new()
             .push(ui::group_label(fl!("sec-configs")))
             .push(self.config_row(Tunnel::P2p))
+            .push(self.config_row(Tunnel::Browser))
             .push(self.config_row(Tunnel::Web))
             .push(help(fl!("cfg-help")))
             .push(ui::inset_divider())
@@ -943,6 +1112,20 @@ impl App {
                 widget::text_input(detected, self.config.qbit_command.clone().unwrap_or_default()).on_input(|s| Message::Edit(Field::Command, s)).into(),
             ))
             .push(ui::inset_divider())
+            .push(ui::group_label(fl!("sec-browser")))
+            .push(
+                self.field_row(
+                    fl!("set-browser-cmd"),
+                    widget::text_input(
+                        browser::detect(None).map_or_else(|| fl!("browser-cmd-none"), |c| c.display),
+                        self.config.browser_command.clone().unwrap_or_default(),
+                    )
+                    .on_input(|s| Message::Edit(Field::BrowserCommand, s))
+                    .into(),
+                ),
+            )
+            .push(help(fl!("browser-help")))
+            .push(ui::inset_divider())
             .push(ui::group_label(fl!("sec-panel")))
             .push(self.toggle_row(Toggle::ShowPort, fl!("set-show-port"), fl!("set-show-port-cap"), self.config.show_port))
             .push(self.toggle_row(Toggle::ShowP2pOff, fl!("set-show-p2p-off"), fl!("set-show-p2p-off-cap"), self.config.show_p2p_off))
@@ -978,6 +1161,10 @@ impl App {
         self.config.p2p_conf = s.p2p_conf;
         self.config.web_conf = s.web_conf.clone();
         self.config.web_nm_uuid = s.web_conf.map(|_| "demo".into());
+        self.browser = s.browser;
+        self.browser_wanted = self.browser.state != TunnelState::Off;
+        self.config.browser_conf = s.browser_conf;
+        self.browser_cmd = browser::detect(Some("/usr/bin/firefox"));
         self.config.icon_style = s.icon_style;
         self.config.show_port = true;
         self.config.show_p2p_off = true;
@@ -996,7 +1183,8 @@ impl App {
         let p = Panel::of(&self.core.applet);
         let pv = self.p2p_view();
         let wv = self.web_view();
-        let icon = reticle(Reticle::of(pv.state, wv.state), model::issue(&pv, &wv), self.config.icon_style, 20.0);
+        let bv = self.browser_view();
+        let icon = reticle(Reticle::of(pv.state, wv.state), bv.state.up(), model::issue(&pv, &wv, &bv), self.config.icon_style, 20.0);
         let content = panel::content(icon, self.chunks(), &p);
         widget::container(widget::container(content).padding([4, 12]).class(theme::Container::Card)).padding([8, 24]).into()
     }
@@ -1011,6 +1199,10 @@ impl App {
 }
 
 // ---- small widgets ------------------------------------------------------------------------
+
+/// A window of its own. (Firefox's own symbolic icon is drawn with
+/// `context-fill`, which the icon renderer can't colour.)
+const BROWSER_ICON: &str = "window-new-symbolic";
 
 /// A `bg-component` box with `radius_s` (8).
 fn boxed(content: Element<'_, Message>) -> Element<'_, Message> {
@@ -1108,10 +1300,26 @@ fn fl_word(key: &str) -> String {
         "head-p2p" => fl!("head-p2p"),
         "head-web" => fl!("head-web"),
         "head-both" => fl!("head-both"),
+        "head-browser" => fl!("head-browser"),
+        "head-p2p-browser" => fl!("head-p2p-browser"),
+        "head-web-browser" => fl!("head-web-browser"),
+        "head-all" => fl!("head-all"),
+        "head-stale" => fl!("head-stale"),
         "head-warn" => fl!("head-warn"),
         "head-leak" => fl!("head-leak"),
         "head-error" => fl!("head-error"),
         other => other.to_owned(),
+    }
+}
+
+/// Why the helper refused a conf.
+fn import_error(e: CallError) -> String {
+    match e {
+        CallError::Denied => fl!("toast-denied"),
+        CallError::Missing => fl!("banner-helper-title"),
+        CallError::Outdated => fl!("toast-helper-old"),
+        CallError::Other(m) => m,
+        CallError::QbitRunning => String::new(),
     }
 }
 
@@ -1152,6 +1360,10 @@ impl cosmic::Application for App {
             popup: None,
             page: if crate::preview_settings() { Page::Settings } else { Page::Main },
             qbit_cmd: qbit::detect(config.qbit_command.as_deref()),
+            browser_cmd: browser::detect(config.browser_command.as_deref()),
+            browser: BrowserStatus::default(),
+            browser_wanted: false,
+            browser_launched: false,
             port_input: config.webui_port.to_string(),
             config,
             handler,
@@ -1226,7 +1438,7 @@ impl cosmic::Application for App {
     fn subscription(&self) -> Subscription<Message> {
         let mut subs = vec![
             cosmic::iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick),
-            self.core.watch_config::<Config>(APP_ID).map(|u| Message::Config(u.config)),
+            self.core.watch_config::<Config>(APP_ID).map(|u| Message::Config(Box::new(u.config))),
             escape(),
         ];
         if !self.demo() {
@@ -1250,7 +1462,11 @@ impl cosmic::Application for App {
                     return cosmic::task::message(cosmic::Action::Surface(destroy_popup(id)));
                 }
                 self.page = Page::Main;
-                self.outside = if self.demo() { self.outside.clone() } else { qbit::outside() };
+                if !self.demo() {
+                    self.outside = qbit::outside();
+                    // Firefox may have been installed since the applet started.
+                    self.browser_cmd = browser::detect(self.config.browser_command.as_deref());
+                }
                 let open = cosmic::task::message(cosmic::Action::Surface(open_popup(bounds, offset)));
                 return Task::batch([open, self.recheck_helper()]);
             }
@@ -1260,10 +1476,13 @@ impl cosmic::Application for App {
                 }
             }
             Message::Config(c) => {
-                let c = c.enforce();
+                let c = (*c).enforce();
                 if c != self.config && !self.demo() {
                     if c.qbit_command != self.config.qbit_command {
                         self.qbit_cmd = qbit::detect(c.qbit_command.as_deref());
+                    }
+                    if c.browser_command != self.config.browser_command {
+                        self.browser_cmd = browser::detect(c.browser_command.as_deref());
                     }
                     self.config = c;
                     self.sync_icon_model();
@@ -1274,6 +1493,7 @@ impl cosmic::Application for App {
                 self.confirm_quit = false;
                 if p == Page::Settings && !self.demo() {
                     self.qbit_cmd = qbit::detect(self.config.qbit_command.as_deref());
+                    self.browser_cmd = browser::detect(self.config.browser_command.as_deref());
                     return Task::batch([self.run_test(), self.recheck_helper()]);
                 }
             }
@@ -1327,7 +1547,11 @@ impl cosmic::Application for App {
                     tracing::info!("the helper is now installed");
                     self.helper_ok = Some(true);
                     if let Some(b) = self.bus() {
-                        return cosmic::task::future(async move { Message::HelperStatus(helper::status(b).await.unwrap_or_default()) });
+                        let b2 = b.clone();
+                        return Task::batch([
+                            cosmic::task::future(async move { Message::HelperStatus(helper::status(b).await.unwrap_or_default()) }),
+                            cosmic::task::future(async move { Message::BrowserStatus(helper::browser_status(b2).await.unwrap_or_default()) }),
+                        ]);
                     }
                 }
                 self.helper_ok = Some(ok);
@@ -1346,6 +1570,9 @@ impl cosmic::Application for App {
                                 Err(_) => Message::HelperStatus(Status::default()),
                             }
                         }));
+                        let b = bus.clone();
+                        // An older helper has no browser tunnel: that reads as off.
+                        tasks.push(cosmic::task::future(async move { Message::BrowserStatus(helper::browser_status(b).await.unwrap_or_default()) }));
                     }
                     if let Some(uuid) = self.config.web_nm_uuid.clone() {
                         tasks.push(cosmic::task::future(async move { Message::Web(nm::state(&bus, &uuid).await.unwrap_or_default()) }));
@@ -1363,6 +1590,28 @@ impl cosmic::Application for App {
                 }
                 let t = self.on_status(s);
                 return Task::batch([t, self.restore()]);
+            }
+            Message::BrowserStatus(s) => {
+                // Adopt a tunnel that's already up (after an applet restart).
+                if s.state != TunnelState::Off {
+                    self.browser_wanted = true;
+                    self.browser_launched = s.browser != BrowserState::Stopped;
+                }
+                return self.on_browser(s);
+            }
+            Message::Helper(helper::Event::Browser(s)) => return self.on_browser(s),
+            Message::LaunchBrowser => return self.launch_browser(),
+            Message::BrowserLaunched(r) => {
+                if let Err(e) = r {
+                    self.browser_launched = false;
+                    let why = match e {
+                        CallError::Denied => fl!("toast-denied"),
+                        CallError::Other(m) => m,
+                        _ => String::new(),
+                    };
+                    tracing::warn!("launching the browser: {why}");
+                    return self.toast(fl!("toast-error", why = why));
+                }
             }
             Message::Helper(helper::Event::Status(s)) => return self.on_status(s),
             Message::Helper(helper::Event::PortChanged(p)) => {
@@ -1392,24 +1641,33 @@ impl cosmic::Application for App {
                 return match (t, on) {
                     (Tunnel::P2p, true) => self.p2p_on(),
                     (Tunnel::P2p, false) => self.p2p_off(self.config.quit_qbit),
+                    (Tunnel::Browser, true) => self.browser_on(),
+                    (Tunnel::Browser, false) => self.browser_off(),
                     (Tunnel::Web, on) => self.web_switch(on),
                 };
             }
             Message::Called(t, r) => {
                 if let Err(e) = r {
                     self.busy.remove(&t);
+                    // The switch goes back to what the helper last reported.
+                    if t == Tunnel::Browser {
+                        self.browser_wanted = self.browser.state != TunnelState::Off;
+                    }
                     match e {
                         CallError::QbitRunning => {
                             self.p2p_wanted = true;
                             self.confirm_quit = true;
                         }
                         CallError::Denied => {
-                            self.p2p_wanted = self.p2p.state != TunnelState::Off;
+                            if t == Tunnel::P2p {
+                                self.p2p_wanted = self.p2p.state != TunnelState::Off;
+                            }
                             return self.toast(fl!("toast-denied"));
                         }
                         CallError::Missing => self.helper_ok = Some(false),
+                        CallError::Outdated => return self.toast(fl!("toast-helper-old")),
                         CallError::Other(m) => {
-                            tracing::warn!("torrent tunnel: {m}");
+                            tracing::warn!(tunnel = ?t, "helper: {m}");
                             return self.toast(fl!("toast-error", why = m));
                         }
                     }
@@ -1497,8 +1755,12 @@ impl cosmic::Application for App {
                 self.importing = None;
                 match r {
                     Ok(s) => {
-                        tracing::info!(server = %s.server_label, "torrent config imported");
-                        self.save(|c, h| c.set_p2p_conf(h, Some(s)));
+                        tracing::info!(server = %s.server_label, tunnel = ?t, "config imported");
+                        if t == Tunnel::Browser {
+                            self.save(|c, h| c.set_browser_conf(h, Some(s)));
+                        } else {
+                            self.save(|c, h| c.set_p2p_conf(h, Some(s)));
+                        }
                     }
                     Err(e) => {
                         self.import_error.insert(t, fl!("cfg-import-failed", why = e));
@@ -1554,6 +1816,11 @@ impl cosmic::Application for App {
                     let v = (!s.trim().is_empty()).then_some(s);
                     self.save(|c, h| c.set_qbit_command(h, v));
                     self.qbit_cmd = qbit::detect(self.config.qbit_command.as_deref());
+                }
+                Field::BrowserCommand => {
+                    let v = (!s.trim().is_empty()).then_some(s);
+                    self.save(|c, h| c.set_browser_command(h, v));
+                    self.browser_cmd = browser::detect(self.config.browser_command.as_deref());
                 }
             },
             Message::TestDue(g) => {
@@ -1684,6 +1951,11 @@ mod tests {
             "head-p2p",
             "head-web",
             "head-both",
+            "head-browser",
+            "head-p2p-browser",
+            "head-web-browser",
+            "head-all",
+            "head-stale",
             "head-warn",
             "head-leak",
             "head-error",

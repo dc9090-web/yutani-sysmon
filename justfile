@@ -95,6 +95,7 @@ vpn-demo:
 vpn-check-conf +files:
     cargo run -q -p cosmic-applet-vpn -- --check-conf {{files}}
 
-# VPN: live leak and kill-switch checks against a running torrent tunnel (sudo).
-vpn-acceptance:
-    sudo crates/vpn-helper/acceptance.sh
+# VPN: live leak and kill-switch checks against a running torrent tunnel
+# (sudo); `just vpn-acceptance browser` checks the browser tunnel instead.
+vpn-acceptance tunnel="p2p":
+    sudo crates/vpn-helper/acceptance.sh {{tunnel}}

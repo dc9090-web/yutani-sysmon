@@ -1,8 +1,10 @@
-//! VPN: a COSMIC panel applet with two ProtonVPN WireGuard switches: a
+//! VPN: a COSMIC panel applet with three ProtonVPN WireGuard switches: a
 //! qBittorrent-only tunnel in its own network namespace (kill switch, port
-//! forwarding), and a NetworkManager tunnel for all web traffic.
+//! forwarding), a Firefox-only tunnel in another, and a NetworkManager
+//! tunnel for all web traffic.
 
 mod app;
+mod browser;
 mod config;
 #[cfg(feature = "demo")]
 mod demo;

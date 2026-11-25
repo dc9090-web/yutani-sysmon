@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use futures_util::StreamExt;
 use vpn_common::conf::{ConfSummary, Hint};
 use vpn_common::dbus::{BUS_NAME, INTERFACE, OBJECT_PATH};
-use vpn_common::status::Status;
+use vpn_common::status::{BrowserStatus, Status};
 use zbus::zvariant::OwnedValue;
 
 /// Why a helper call failed, as far as the UI cares.
@@ -17,6 +17,8 @@ pub enum CallError {
     QbitRunning,
     /// The helper isn't installed.
     Missing,
+    /// The installed helper predates this call (it has no browser tunnel).
+    Outdated,
     /// Anything else, with the helper's message.
     Other(String),
 }
@@ -33,6 +35,8 @@ impl From<zbus::Error> for CallError {
                     Self::QbitRunning
                 } else if name == "org.freedesktop.DBus.Error.ServiceUnknown" || name == "org.freedesktop.DBus.Error.NameHasNoOwner" {
                     Self::Missing
+                } else if name == "org.freedesktop.DBus.Error.UnknownMethod" {
+                    Self::Outdated
                 } else {
                     Self::Other(if msg.is_empty() { name.to_owned() } else { msg })
                 }
@@ -60,8 +64,17 @@ pub async fn available(conn: &zbus::Connection) -> bool {
 
 /// Sends the conf text once, for the helper to re-parse and store root-only.
 pub async fn import_p2p(conn: zbus::Connection, conf: zeroize::Zeroizing<String>, file_name: String) -> Result<ConfSummary> {
+    import(conn, "ImportP2p", conf, file_name).await
+}
+
+/// The same, for the browser tunnel's conf.
+pub async fn import_browser(conn: zbus::Connection, conf: zeroize::Zeroizing<String>, file_name: String) -> Result<ConfSummary> {
+    import(conn, "ImportBrowser", conf, file_name).await
+}
+
+async fn import(conn: zbus::Connection, method: &str, conf: zeroize::Zeroizing<String>, file_name: String) -> Result<ConfSummary> {
     let p = proxy(&conn).await?;
-    let d: HashMap<String, OwnedValue> = p.call("ImportP2p", &(conf.as_str(),)).await?;
+    let d: HashMap<String, OwnedValue> = p.call(method, &(conf.as_str(),)).await?;
     drop(conf);
     let text = |k: &str| d.get(k).and_then(|v| <&str>::try_from(v).ok()).unwrap_or_default().to_owned();
     Ok(ConfSummary {
@@ -103,6 +116,24 @@ pub async fn status(conn: zbus::Connection) -> Result<Status> {
     Ok(Status::from_dict(&d))
 }
 
+pub async fn browser_up(conn: zbus::Connection) -> Result<()> {
+    Ok(proxy(&conn).await?.call("BrowserUp", &()).await?)
+}
+
+/// Quits the browser and takes its tunnel down.
+pub async fn browser_down(conn: zbus::Connection) -> Result<()> {
+    Ok(proxy(&conn).await?.call("BrowserDown", &()).await?)
+}
+
+pub async fn launch_browser(conn: zbus::Connection, argv: Vec<String>, env: HashMap<String, String>) -> Result<()> {
+    Ok(proxy(&conn).await?.call("LaunchBrowser", &(argv, env)).await?)
+}
+
+pub async fn browser_status(conn: zbus::Connection) -> Result<BrowserStatus> {
+    let d: HashMap<String, OwnedValue> = proxy(&conn).await?.call("GetBrowserStatus", &()).await?;
+    Ok(BrowserStatus::from_dict(&d))
+}
+
 pub async fn web_handshake(conn: zbus::Connection) -> Result<u32> {
     Ok(proxy(&conn).await?.call("GetWebHandshake", &()).await?)
 }
@@ -111,6 +142,7 @@ pub async fn web_handshake(conn: zbus::Connection) -> Result<u32> {
 #[derive(Debug, Clone)]
 pub enum Event {
     Status(Status),
+    Browser(BrowserStatus),
     PortChanged(u16),
 }
 
@@ -128,6 +160,9 @@ pub fn events() -> impl futures_util::Stream<Item = Event> {
                     let hdr = msg.header();
                     let event = match hdr.member().map(|m| m.as_str()) {
                         Some("StatusChanged") => msg.body().deserialize::<HashMap<String, OwnedValue>>().ok().map(|d| Event::Status(Status::from_dict(&d))),
+                        Some("BrowserChanged") => {
+                            msg.body().deserialize::<HashMap<String, OwnedValue>>().ok().map(|d| Event::Browser(BrowserStatus::from_dict(&d)))
+                        }
                         Some("PortChanged") => msg.body().deserialize::<u16>().ok().map(Event::PortChanged),
                         _ => None,
                     };

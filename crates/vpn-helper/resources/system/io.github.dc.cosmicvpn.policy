@@ -5,8 +5,8 @@
 <policyconfig>
   <vendor>COSMIC VPN applet</vendor>
   <action id="io.github.dc.cosmicvpn.control">
-    <description>Control the torrent VPN tunnel and qBittorrent</description>
-    <message>Authentication is required to control the torrent VPN tunnel</message>
+    <description>Control the torrent and browser VPN tunnels and the apps in them</description>
+    <message>Authentication is required to control the VPN tunnels</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
@@ -14,7 +14,7 @@
     </defaults>
   </action>
   <action id="io.github.dc.cosmicvpn.import">
-    <description>Install a WireGuard configuration for the torrent tunnel</description>
+    <description>Install a WireGuard configuration for the torrent or browser tunnel</description>
     <message>Authentication is required to install a VPN configuration</message>
     <defaults>
       <allow_any>no</allow_any>

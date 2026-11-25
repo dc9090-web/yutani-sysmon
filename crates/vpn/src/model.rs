@@ -1,8 +1,8 @@
-//! What the UI shows, derived from the two tunnels' states: the issue dot,
+//! What the UI shows, derived from the three tunnels' states: the issue dot,
 //! the reticle, the panel chunks and the header caption (SPEC §7.1, the
 //! prototype's `vpnIssue`, `vpnIcon`, `vpnWord`, `vpnHeadHTML`).
 
-use vpn_common::status::{PortState, QbitState, Status, TunnelState};
+use vpn_common::status::{BrowserStatus, PortState, QbitState, Status, TunnelState};
 
 /// The web tunnel, as NetworkManager reports it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -26,14 +26,20 @@ pub enum Issue {
     Warning,
 }
 
-pub fn issue(p2p: &Status, web: &Web) -> Option<Issue> {
-    if p2p.qbit == QbitState::Outside || p2p.state == TunnelState::Error || web.state == TunnelState::Error {
+pub fn issue(p2p: &Status, web: &Web, browser: &BrowserStatus) -> Option<Issue> {
+    let states = [p2p.state, web.state, browser.state];
+    if p2p.qbit == QbitState::Outside || states.contains(&TunnelState::Error) {
         return Some(Issue::Error);
     }
-    if p2p.state == TunnelState::Stale || web.state == TunnelState::Stale || (p2p.state == TunnelState::On && p2p.port_state == PortState::Fail) {
+    if states.contains(&TunnelState::Stale) || p2p_warning(p2p) {
         return Some(Issue::Warning);
     }
     None
+}
+
+/// The torrent tunnel is stale, or up without a forwarded port.
+fn p2p_warning(p2p: &Status) -> bool {
+    p2p.state == TunnelState::Stale || (p2p.state == TunnelState::On && p2p.port_state == PortState::Fail)
 }
 
 /// The reticle: first chevron = torrents, second = web; brackets close in
@@ -91,16 +97,21 @@ pub fn port_chunk(p2p: &Status, show_port: bool) -> Option<u16> {
 }
 
 /// The header caption's `.ftl` key and tone.
-pub fn header(p2p: &Status, web: &Web) -> (&'static str, Option<Tone>) {
-    match issue(p2p, web) {
+pub fn header(p2p: &Status, web: &Web, browser: &BrowserStatus) -> (&'static str, Option<Tone>) {
+    match issue(p2p, web, browser) {
         Some(Issue::Error) if p2p.qbit == QbitState::Outside => ("head-leak", Some(Tone::Err)),
         Some(Issue::Error) => ("head-error", Some(Tone::Err)),
-        Some(Issue::Warning) => ("head-warn", Some(Tone::Warn)),
-        None => match (p2p.state.up(), web.state.up()) {
-            (true, true) => ("head-both", Some(Tone::On)),
-            (true, false) => ("head-p2p", Some(Tone::On)),
-            (false, true) => ("head-web", Some(Tone::On)),
-            (false, false) => ("head-none", None),
+        Some(Issue::Warning) if p2p_warning(p2p) => ("head-warn", Some(Tone::Warn)),
+        Some(Issue::Warning) => ("head-stale", Some(Tone::Warn)),
+        None => match (p2p.state.up(), web.state.up(), browser.state.up()) {
+            (true, true, true) => ("head-all", Some(Tone::On)),
+            (true, true, false) => ("head-both", Some(Tone::On)),
+            (true, false, true) => ("head-p2p-browser", Some(Tone::On)),
+            (false, true, true) => ("head-web-browser", Some(Tone::On)),
+            (true, false, false) => ("head-p2p", Some(Tone::On)),
+            (false, true, false) => ("head-web", Some(Tone::On)),
+            (false, false, true) => ("head-browser", Some(Tone::On)),
+            (false, false, false) => ("head-none", None),
         },
     }
 }
@@ -117,6 +128,18 @@ mod tests {
         Web { state, ..Web::default() }
     }
 
+    fn br(state: TunnelState) -> BrowserStatus {
+        BrowserStatus { state, ..BrowserStatus::default() }
+    }
+
+    fn issue(p2p: &Status, web: &Web) -> Option<Issue> {
+        super::issue(p2p, web, &br(TunnelState::Off))
+    }
+
+    fn header(p2p: &Status, web: &Web) -> (&'static str, Option<Tone>) {
+        super::header(p2p, web, &br(TunnelState::Off))
+    }
+
     #[test]
     fn issues() {
         assert_eq!(issue(&p2p(TunnelState::On), &web(TunnelState::On)), None);
@@ -129,6 +152,11 @@ mod tests {
         assert_eq!(issue(&no_port, &web(TunnelState::Off)), Some(Issue::Warning));
         // A failed port only matters while the tunnel is on.
         assert_eq!(issue(&Status { port_state: PortState::Fail, ..Status::default() }, &web(TunnelState::Off)), None);
+        // The browser tunnel counts like the others.
+        let off = (p2p(TunnelState::Off), web(TunnelState::Off));
+        assert_eq!(super::issue(&off.0, &off.1, &br(TunnelState::On)), None);
+        assert_eq!(super::issue(&off.0, &off.1, &br(TunnelState::Error)), Some(Issue::Error));
+        assert_eq!(super::issue(&off.0, &off.1, &br(TunnelState::Stale)), Some(Issue::Warning));
         // Leaks outrank stale.
         assert_eq!(issue(&Status { qbit: QbitState::Outside, ..p2p(TunnelState::Stale) }, &web(TunnelState::Off)), Some(Issue::Error));
     }
@@ -171,5 +199,13 @@ mod tests {
         assert_eq!(header(&Status { qbit: QbitState::Outside, ..p2p(TunnelState::On) }, &web(TunnelState::Off)).0, "head-leak");
         assert_eq!(header(&p2p(TunnelState::Off), &web(TunnelState::Error)).0, "head-error");
         assert_eq!(header(&p2p(TunnelState::Stale), &web(TunnelState::Off)).0, "head-warn");
+        // A stale tunnel that isn't the torrent one doesn't blame it.
+        assert_eq!(header(&p2p(TunnelState::Off), &web(TunnelState::Stale)).0, "head-stale");
+        let (off, on) = (TunnelState::Off, TunnelState::On);
+        assert_eq!(super::header(&p2p(off), &web(off), &br(on)).0, "head-browser");
+        assert_eq!(super::header(&p2p(on), &web(off), &br(on)).0, "head-p2p-browser");
+        assert_eq!(super::header(&p2p(off), &web(on), &br(on)).0, "head-web-browser");
+        assert_eq!(super::header(&p2p(on), &web(on), &br(on)).0, "head-all");
+        assert_eq!(super::header(&p2p(off), &web(off), &br(TunnelState::Stale)).0, "head-stale");
     }
 }

@@ -7,7 +7,7 @@
 
 <br>
 
-**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD, Intel or NVIDIA GPU, memory and disk at a glance; your Claude usage limits and monthly API credits; the weather for your cities; and a ProtonVPN WireGuard switch with a torrent-only kill switch.**
+**Five tiny, native COSMIC panel applets: live network traffic; CPU, AMD, Intel or NVIDIA GPU, memory and disk at a glance; your Claude usage limits and monthly API credits; the weather for your cities; and a ProtonVPN WireGuard switch with torrent-only and Firefox-only kill switches.**
 
 The system applets read straight from procfs and sysfs: no system-stats crates, no daemon, no polling of anything you aren't looking at, one read pass a second and less memory than COSMIC's own clock. AI Usage makes one or two small HTTPS requests every few minutes, with its own Claude sign-in (kept in the system keyring) or Claude Code's existing login, which it never modifies, plus an optional Admin API key for your plan's API credits. Weather refreshes one city every 30 minutes with your own OpenWeather key, kept in the system keyring. VPN follows NetworkManager and its own root helper through D-Bus signals rather than polling. Each applet costs about 0.1 % of one core.
 
@@ -37,7 +37,7 @@ The system applets read straight from procfs and sysfs: no system-stats crates, 
 | 📶 | **Network Traffic** | Live download and upload for one adapter (numbers, sparkline, or both), with a 60 s graph and session totals in the popup. Follows the default route automatically. |
 | 🖥️ | **System Monitor** | CPU, AMD, Intel or NVIDIA GPU, RAM and disk I/O as labelled chunks in the panel; a detailed popup with clocks, temperatures, power, VRAM, swap and NVMe temps. |
 | 🤖 | **AI Usage** | Claude's Session (7-day, all models) and Fable limits as small bars in the panel, with reset times and pace in the popup, plus this month's spend of the API credits that come with Max, Ultra and Team plans. Signs in to Claude on its own, or reuses Claude Code's login read-only. |
-| 🛡️ | **VPN** | Two ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent, and a NetworkManager tunnel for everything else. |
+| 🛡️ | **VPN** | Three ProtonVPN WireGuard switches: a tunnel only qBittorrent can use, with a kill switch by construction and the forwarded port set in qBittorrent; a tunnel only a separate Firefox can use; and a NetworkManager tunnel for everything else. |
 | 🌤️ | **Weather** | The icon and temperature for one of up to 5 saved cities; a popup with current conditions, alerts, the next 24 hours, 7 days and details. OpenWeather, with your own key. |
 
 They are separate applets, each with its own panel slot, settings and process. Add any combination.
@@ -58,7 +58,7 @@ They are separate applets, each with its own panel slot, settings and process. A
 | 🌐 | **Anthropic only, no telemetry** | AI Usage talks only to Anthropic over rustls (`api.anthropic.com`, plus `platform.claude.com` to renew its own sign-in) and caches no usage or spend on disk. Its own login and the optional Admin API key live in the keyring; Claude Code's token is held only for the length of a request. |
 | 🗝️ | **Key in the keyring** | Weather keeps your OpenWeather key in the Secret Service keyring (a 0600 file only if there's none), never in config or logs, and talks only to `api.openweathermap.org`. |
 | 🔑 | **Hands off your login** | AI Usage has its own Claude sign-in that renews itself, and opens Claude Code's credentials read-only, so it can't log Claude Code out. |
-| 🔒 | **No privileges, except one helper** | The applets never call `sudo` or `pkexec` or write to sysfs; root-only counters show `—`. The one exception is VPN's torrent tunnel: a small D-Bus-activated root helper, sandboxed by systemd and guarded by polkit, that only builds the namespace and starts qBittorrent in it. |
+| 🔒 | **No privileges, except one helper** | The applets never call `sudo` or `pkexec` or write to sysfs; root-only counters show `—`. The one exception is VPN's torrent and browser tunnels: a small D-Bus-activated root helper, sandboxed by systemd and guarded by polkit, that only builds the namespaces and starts qBittorrent or Firefox in them. |
 
 Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the system applets; 6 min, startup included, for AI Usage; 60 s for VPN):
 
@@ -68,7 +68,7 @@ Measured on a Ryzen 9 3950X with an RX 9070 XT on the live panel (30 s for the s
 | System Monitor | ~0.1 % of one core | 24.7 MB |
 | AI Usage | ~0.1 % of one core (one or two requests every 5 min) | 31.2 MB |
 | Weather | idle between refreshes (one city every 30 min) | 32.7 MB |
-| VPN | ~0.1 % of one core (both tunnels off) | 30.5 MB |
+| VPN | ~0.1 % of one core (all tunnels off) | 30.5 MB |
 | *stock COSMIC clock applet* | – | 28.8 MB |
 
 ---
@@ -222,26 +222,28 @@ The condition icon and the temperature for your panel city, in a fixed 4-charact
 
 *Screenshots use the demo data (`just vpn-demo`).*
 
-Two independent switches, each backed by its own Proton WireGuard `.conf`:
+Three independent switches, each backed by its own Proton WireGuard `.conf`:
 
 - 🧲 **Torrents · qBittorrent:** a root helper builds a network namespace whose only interfaces are `lo` and the WireGuard tunnel, and starts qBittorrent inside it. That's the kill switch: if the tunnel drops, torrents stop, and nothing in the namespace can fall back to your real connection. Proton's NAT-PMP port forwarding is renewed every 45 s and set as qBittorrent's listening port (in its config before launch, then live through its Web UI). DNS inside goes only to Proton's resolver.
+- 🦊 **Browser · Firefox:** a second namespace built the same way, with its own tunnel. Turning it on opens a separate Firefox inside it, as its own instance with its own profile (your everyday Firefox, if it's open, is untouched and stays on your normal connection). That Firefox has no route but the tunnel, and its DNS goes only to Proton's resolver. It opens once the tunnel has a handshake, never before; closing it turns the tunnel off, and turning the switch off closes it. It isn't restored at login.
 - 🌐 **All web traffic:** a NetworkManager WireGuard connection, imported once, with IPv6 routed into the tunnel so it can't leak around it. NetworkManager stays the source of truth, so toggling it in COSMIC Settings works too.
-- 🔀 **Both at once:** the torrent tunnel's encrypted packets carry a firewall mark that routes them past the web tunnel, so torrents keep their own exit and port.
+- 🔀 **All at once:** the torrent and browser tunnels' encrypted packets carry a firewall mark that routes them past the web tunnel, so each keeps its own exit (and torrents their port).
 - 🚨 **Leak detection:** a qBittorrent started any other way is spotted within 10 s (red dot and a banner); **Restart in VPN** moves it inside. Only qBittorrent started from the applet is protected, and other torrent clients aren't detected.
-- 🎯 **Panel:** the reticle (first chevron = torrents, second = web), `P2P` / `WEB` / `PORT` chunks that never change width, and an amber or red dot when something needs attention. Either chunk can be hidden while its tunnel is off. **Mono**, **Neon** or **Auto** icon style (Auto glows only while a tunnel is connected).
+- 🎯 **Panel:** the reticle (first chevron = torrents, second = web, a bar on the frame's bottom edge = browser), `P2P` / `WEB` / `PORT` chunks that never change width, a `FOX` chunk while the browser tunnel is on, and an amber or red dot when something needs attention. Either chunk can be hidden while its tunnel is off. **Mono**, **Neon** or **Auto** icon style (Auto glows only while a tunnel is connected).
 - 🔐 **Secrets:** private keys are parsed only to validate them, then go to the root helper (stored 0600 in `/etc/cosmic-vpn/`) or to NetworkManager. They are never logged, shown or kept in config. The qBittorrent Web UI password lives in the keyring.
 
-**Setup:** download two configs from account.protonvpn.com → Downloads → WireGuard (one **P2P** server with **NAT-PMP on** and **Moderate NAT off** for torrents, any server for web). In qBittorrent, enable the Web UI on port 8080 and turn off its own UPnP/NAT-PMP. Then:
+**Setup:** download a config per tunnel you want from account.protonvpn.com → Downloads → WireGuard (one **P2P** server with **NAT-PMP on** and **Moderate NAT off** for torrents, any server for the browser, any server for web). Each tunnel needs its own config, since one key can't be connected twice. In qBittorrent, enable the Web UI on port 8080 and turn off its own UPnP/NAT-PMP. Then:
 
 ```sh
 just vpn-check-conf ~/Downloads/*.conf   # what the parser sees; the key is never printed
 just vpn-helper-install                  # the root helper, D-Bus, systemd and polkit files (sudo)
 ```
 
-and import both configs from the applet's settings. Importing the torrent config asks for your admin password once; switching tunnels doesn't. `just vpn-helper-uninstall` removes the helper and any tunnel left up.
+and import the configs from the applet's settings. Importing the torrent or browser config asks for your admin password once; switching tunnels doesn't. `just vpn-helper-uninstall` removes the helper and any tunnel left up.
 
+- 🦊 **Firefox** is found as `firefox` on `PATH`, else the `org.mozilla.firefox` Flatpak, or the command you set (anything that takes Firefox's `--no-remote --profile <dir>`, such as LibreWolf). Its profile lives in `~/.local/share/cosmic-vpn/firefox-profile`. Only the Firefox started from the applet is inside the tunnel.
 - 📦 **Native or Flatpak qBittorrent** both work; the applet finds `qbittorrent` on `PATH`, else `org.qbittorrent.qBittorrent`, or uses the command you set.
-- ✅ **`sudo crates/vpn-helper/acceptance.sh`** checks a running torrent tunnel: its exit IPs against the host's, that the namespace has no way out but the tunnel, the conf file's permissions, and the kill switch (it blackholes the endpoint for 15 s, then restores it).
+- ✅ **`sudo crates/vpn-helper/acceptance.sh`** (or `… acceptance.sh browser` for the browser tunnel) checks a running tunnel: its exit IPs against the host's, that the namespace has no way out but the tunnel, the conf file's permissions, and the kill switch (it blackholes the endpoint for 15 s, then restores it).
 
 ---
 

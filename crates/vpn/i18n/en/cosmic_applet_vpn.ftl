@@ -1,6 +1,7 @@
 ## Panel
 panel-p2p = P2P
 panel-web = WEB
+panel-browser = FOX
 panel-port = PORT
 panel-on = ON
 panel-off = OFF
@@ -8,6 +9,7 @@ panel-connecting = …
 panel-error = ERR
 panel-tooltip = VPN · Torrents { $p2p } · Web { $web }
 panel-tooltip-port = , port { $port }
+panel-tooltip-browser = {" "}· Browser { $browser }
 panel-tooltip-leak = · qBittorrent outside VPN
 
 ## Header
@@ -15,7 +17,12 @@ title = ProtonVPN · WireGuard
 head-none = Not protected
 head-p2p = Torrent tunnel on
 head-web = Web tunnel on
-head-both = Both tunnels on
+head-both = Torrent and web tunnels on
+head-browser = Browser tunnel on
+head-p2p-browser = Torrent and browser tunnels on
+head-web-browser = Web and browser tunnels on
+head-all = All three tunnels on
+head-stale = A tunnel is reconnecting
 head-warn = Check the torrent tunnel
 head-leak = Leak: qBittorrent outside the VPN
 head-error = A tunnel failed to connect
@@ -23,6 +30,19 @@ head-error = A tunnel failed to connect
 ## Cards
 card-p2p-title = Torrents · qBittorrent
 card-web-title = All web traffic
+card-browser-title = Browser · Firefox
+card-browser-caption = { $server } · isolated
+row-browser = Firefox
+browser-running = Running in VPN
+browser-starting = Starting in VPN…
+browser-stopped = Not running
+browser-open = Open in VPN
+browser-missing = Firefox isn't installed. Install it, or set a browser command in settings.
+note-browser-off = Opens a separate Firefox, with its own profile, that can only use this tunnel.
+note-browser-armed = Firefox opens once the tunnel is up, never before.
+note-browser-on = Kill switch on · this Firefox can only reach the internet through this tunnel. Close it and the tunnel turns off.
+note-both-browser = Torrents and the isolated Firefox keep their own tunnels.
+note-web-browser = The isolated Firefox keeps its own tunnel.
 card-p2p-caption = { $server } · P2P
 card-web-caption = { $server } · NetworkManager
 switch-p2p = Torrent tunnel
@@ -77,13 +97,14 @@ cancel = Cancel
 toast-denied = Permission denied
 toast-qbit-failed = qBittorrent failed to start (exit { $code })
 toast-error = { $why }
+toast-helper-old = Update the system helper to use the browser tunnel
 
 ## Banners
 banner-import-title = Import your Proton WireGuard configs
-banner-import-body = Download two configs from account.protonvpn.com → Downloads → WireGuard: one P2P server with NAT-PMP (port forwarding) on, one for web.
+banner-import-body = Download your configs from account.protonvpn.com → Downloads → WireGuard: one P2P server with NAT-PMP (port forwarding) on for torrents, one for the isolated Firefox, one for web. Each tunnel needs its own.
 banner-import-btn = Import configs
 banner-helper-title = System helper missing
-banner-helper-body = The torrent tunnel and kill switch need the cosmic-vpn-helper service (root). Install the package, then reopen the applet.
+banner-helper-body = The torrent and browser tunnels and their kill switch need the cosmic-vpn-helper service (root). Install the package, then reopen the applet.
 
 ## Settings
 settings = Applet settings
@@ -98,7 +119,7 @@ flag-moderate-nat = Moderate NAT on · port forwarding won't work
 flag-p2p = P2P
 flag-killswitch = Kill switch · namespace
 flag-in-nm = In NetworkManager ✓
-cfg-help = Private keys are copied to root-only files and never shown. Turn a tunnel off to replace its config.
+cfg-help = Private keys are copied to root-only files and never shown. Each tunnel needs its own config: one key can't be connected twice. Turn a tunnel off to replace its config.
 err-not-wg = Not a WireGuard config
 err-no-key = Missing or invalid PrivateKey
 err-no-default = AllowedIPs must include 0.0.0.0/0
@@ -126,6 +147,10 @@ webui-not-running = Start qBittorrent to test
 manual-help = Copy the forwarded port into qBittorrent → Options → Connection, and turn off UPnP / NAT-PMP there.
 set-qbit-cmd = qBittorrent command
 qbit-cmd-none = qBittorrent not found
+sec-browser = Browser
+set-browser-cmd = Browser command
+browser-cmd-none = Firefox not found
+browser-help = The isolated Firefox keeps its own profile (logins, history, extensions), separate from your everyday one.
 rate-down = Download
 rate-up = Upload
 sec-panel = Panel

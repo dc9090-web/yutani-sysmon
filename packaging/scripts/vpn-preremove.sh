@@ -8,8 +8,9 @@ case "${1:-}" in
     *)
         systemctl stop cosmic-vpn-helper.service 2>/dev/null || true
         ip netns del vpn-p2p 2>/dev/null || true
+        ip netns del vpn-browser 2>/dev/null || true
         while ip rule del fwmark 0xca6c priority 100 2>/dev/null; do :; done
         while ip -6 rule del fwmark 0xca6c priority 100 2>/dev/null; do :; done
-        rm -rf /etc/netns/vpn-p2p
+        rm -rf /etc/netns/vpn-p2p /etc/netns/vpn-browser
         ;;
 esac

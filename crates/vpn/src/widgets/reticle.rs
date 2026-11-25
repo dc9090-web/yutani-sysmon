@@ -4,6 +4,9 @@
 //! pink (`accent_pink`) when there's an issue, over a soft glow drawn as
 //! stacked translucent discs. Off stays muted with no glow. Auto draws Neon
 //! while a tunnel is up and Mono while none is.
+//!
+//! The two chevrons are the torrent and web tunnels. The browser tunnel is a
+//! third mark, a short bar that closes the bottom of the frame while it's up.
 
 use cosmic::iced::alignment::{Horizontal, Vertical};
 use cosmic::iced::mouse;
@@ -22,13 +25,25 @@ const DOT: f32 = 7.0;
 
 /// The reticles are embedded, so they show before (or without) an install;
 /// the installed copies are for the applet list.
-fn svg(r: Reticle) -> &'static [u8] {
+fn svg(r: Reticle) -> &'static str {
     match r {
-        Reticle::Off => include_bytes!("../../resources/icons/vpn-reticle-off-symbolic.svg"),
-        Reticle::P2p => include_bytes!("../../resources/icons/vpn-reticle-p2p-symbolic.svg"),
-        Reticle::Web => include_bytes!("../../resources/icons/vpn-reticle-web-symbolic.svg"),
-        Reticle::Both => include_bytes!("../../resources/icons/vpn-reticle-both-symbolic.svg"),
+        Reticle::Off => include_str!("../../resources/icons/vpn-reticle-off-symbolic.svg"),
+        Reticle::P2p => include_str!("../../resources/icons/vpn-reticle-p2p-symbolic.svg"),
+        Reticle::Web => include_str!("../../resources/icons/vpn-reticle-web-symbolic.svg"),
+        Reticle::Both => include_str!("../../resources/icons/vpn-reticle-both-symbolic.svg"),
     }
+}
+
+/// The reticle's SVG, with the browser tunnel's bar on the frame's bottom
+/// edge (which sits 1 px in when both chevrons are solid).
+fn svg_bytes(r: Reticle, browser: bool) -> std::borrow::Cow<'static, [u8]> {
+    let base = svg(r);
+    if !browser {
+        return base.as_bytes().into();
+    }
+    let y = if r == Reticle::Both { 13.35 } else { 14.35 };
+    let bar = format!(r##"<rect x="6.25" y="{y}" width="3.5" height="1.3" fill="#222222"/></svg>"##);
+    base.replacen("</svg>", &bar, 1).into_bytes().into()
 }
 const HALO: f32 = 2.0;
 
@@ -60,9 +75,9 @@ impl<M> canvas::Program<M, cosmic::Theme, Renderer> for Glow {
 }
 
 /// The reticle at `size` px, with room for the dot so the width never changes.
-pub fn reticle<'a, M: 'a>(r: Reticle, issue: Option<Issue>, style: IconStyle, size: f32) -> Element<'a, M> {
-    let handle = icon::from_svg_bytes(svg(r)).symbolic(true);
-    let lit = r != Reticle::Off;
+pub fn reticle<'a, M: 'a>(r: Reticle, browser: bool, issue: Option<Issue>, style: IconStyle, size: f32) -> Element<'a, M> {
+    let handle = icon::from_svg_bytes(svg_bytes(r, browser)).symbolic(true);
+    let lit = r != Reticle::Off || browser;
     let style = style.resolve(lit);
     let is_issue = issue.is_some();
     let glyph = widget::icon(handle).size(size as u16);
@@ -103,4 +118,18 @@ pub fn reticle<'a, M: 'a>(r: Reticle, issue: Option<Issue>, style: IconStyle, si
         .align_x(Horizontal::Right)
         .align_y(Vertical::Top);
     cosmic::iced::widget::stack([base.into(), corner.into()]).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn browser_bar() {
+        for r in [Reticle::Off, Reticle::P2p, Reticle::Web, Reticle::Both] {
+            assert_eq!(&*svg_bytes(r, false), svg(r).as_bytes());
+            let with = String::from_utf8(svg_bytes(r, true).into_owned()).unwrap();
+            assert!(with.trim_end().ends_with("/></svg>") && with.matches("</svg>").count() == 1 && with.contains("<rect "), "{with}");
+        }
+    }
 }

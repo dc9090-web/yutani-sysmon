@@ -9,7 +9,7 @@ maintainer: dc9090-web <noreply@github.com>
 homepage: https://github.com/dc9090-web/yutani-sysmon
 license: GPL-3.0-or-later
 description: |
-  Yutani VPN: COSMIC panel applet for ProtonVPN WireGuard, with a torrent-only tunnel (kill switch, port forwarding) and a NetworkManager web tunnel. Includes its D-Bus-activated root helper.
+  Yutani VPN: COSMIC panel applet for ProtonVPN WireGuard, with a torrent-only tunnel (kill switch, port forwarding), a Firefox-only tunnel and a NetworkManager web tunnel. Includes its D-Bus-activated root helper.
 depends:
   - libxkbcommon
 archlinux:

@@ -10,11 +10,12 @@ ICONS=crates/vpn/resources/icons
 
 if [ "${1:-}" = "--uninstall" ]; then
     systemctl stop cosmic-vpn-helper.service 2>/dev/null || true
-    # The namespace and its rules, if a tunnel was left up.
+    # The namespaces and their rules, if a tunnel was left up.
     ip netns del vpn-p2p 2>/dev/null || true
+    ip netns del vpn-browser 2>/dev/null || true
     while ip rule del fwmark 0xca6c priority 100 2>/dev/null; do :; done
     while ip -6 rule del fwmark 0xca6c priority 100 2>/dev/null; do :; done
-    rm -rf /etc/netns/vpn-p2p
+    rm -rf /etc/netns/vpn-p2p /etc/netns/vpn-browser
     rm -f /usr/lib/cosmic-vpn-helper/cosmic-vpn-helper /usr/share/dbus-1/system.d/io.github.dc.CosmicVpnHelper.conf \
         /usr/share/dbus-1/system-services/io.github.dc.CosmicVpnHelper.service /usr/lib/systemd/system/cosmic-vpn-helper.service \
         /usr/share/polkit-1/actions/io.github.dc.cosmicvpn.policy
@@ -22,7 +23,7 @@ if [ "${1:-}" = "--uninstall" ]; then
     for i in off p2p web both; do rm -f /usr/share/icons/hicolor/scalable/apps/vpn-reticle-$i-symbolic.svg; done
     systemctl daemon-reload
     systemctl reload dbus 2>/dev/null || true
-    echo "Removed. /etc/cosmic-vpn (the torrent conf) is kept; delete it yourself if you want."
+    echo "Removed. /etc/cosmic-vpn (the torrent and browser confs) is kept; delete it yourself if you want."
     exit 0
 fi
 
