@@ -1,8 +1,9 @@
 Five tiny, native COSMIC panel applets, now with **one package per applet** for Pop!_OS / Ubuntu, Fedora and Arch. Install the ones you want, then add them in *Settings → Desktop → Panel → Applets*: they're all listed as **Yutani …**, so search for *Yutani*.
 
-### ✨ New since 0.3.0
+### ✨ New since 0.3.1
 
-- 🤖 **AI Usage**: the plan chip in the popup header now shows the plan name Anthropic reports for your organisation, so an **Ultra** plan reads Ultra rather than Max (Anthropic still files Ultra under the Max tier internally). The plan and email are re-read each time the applet starts, not only when the login renews, so a plan change shows at the next launch.
+- 🤖 **AI Usage**: the API credits row no longer shows "spend format not recognised" on the day your credits renew. Anthropic's cost report only has whole UTC days and refused the request while the new cycle had none; the row now reads $0.00 until the first day is complete. The settings tip and README say plainly that today's spend shows after midnight UTC.
+- 🔒 **VPN**: a third switch, **Browser · Firefox**, opens Firefox as its own instance, with its own profile, inside a network namespace with its own WireGuard tunnel. Closing Firefox takes the tunnel down, and turning the switch off closes Firefox.
 
 ### 📦 Install
 
