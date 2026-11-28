@@ -120,12 +120,18 @@ pub enum Outcome {
     Unrecognised(u16),
 }
 
+/// Where the report for the cycle can end: the last UTC midnight, since the
+/// report only has whole days and answers 400 to a range that holds none.
+/// `None` on the cycle's first day, when there's nothing to ask for yet.
+fn report_end(cycle: Cycle, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    let midnight = now.date_naive().and_hms_opt(0, 0, 0).expect("midnight exists").and_utc();
+    let end = midnight.min(cycle.end);
+    (end > cycle.start).then_some(end)
+}
+
 /// Reads the cycle's spend so far. The key is dropped when this returns.
 pub async fn fetch(client: reqwest::Client, key: AdminKey, cycle: Cycle, now: DateTime<Utc>) -> Outcome {
-    let end = now.min(cycle.end);
-    if end <= cycle.start {
-        return Outcome::Spent(0);
-    }
+    let Some(end) = report_end(cycle, now) else { return Outcome::Spent(0) };
     let stamp = |t: DateTime<Utc>| t.to_rfc3339_opts(SecondsFormat::Secs, true);
     let mut total = 0;
     let mut page: Option<String> = None;
@@ -335,6 +341,21 @@ mod tests {
                 assert!(cy.start <= at(now) && at(now) < cy.end, "day {day} at {now}: {cy:?}");
             }
         }
+    }
+
+    #[test]
+    fn report_covers_whole_days_only() {
+        let cycle = Cycle::at(28, at("2026-11-28T04:08:00Z"));
+        // The cycle's first day has no whole day yet: nothing to request.
+        assert_eq!(report_end(cycle, at("2026-11-28T00:00:00Z")), None);
+        assert_eq!(report_end(cycle, at("2026-11-28T04:08:00Z")), None);
+        assert_eq!(report_end(cycle, at("2026-11-28T23:59:59Z")), None);
+        // From the second day, up to the last midnight.
+        assert_eq!(report_end(cycle, at("2026-11-29T00:00:00Z")), Some(at("2026-11-29T00:00:00Z")));
+        assert_eq!(report_end(cycle, at("2026-12-05T13:00:00Z")), Some(at("2026-12-05T00:00:00Z")));
+        // Never past the cycle, nor before it.
+        assert_eq!(report_end(cycle, at("2027-01-03T00:00:00Z")), Some(cycle.end));
+        assert_eq!(report_end(cycle, at("2026-11-20T00:00:00Z")), None);
     }
 
     #[test]
